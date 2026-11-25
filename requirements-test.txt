@@ -1,0 +1,8 @@
+# Python 3.14 (Home Assistant 2026.10 needs >= 3.14.2). Pinned to the minimum HA version in hacs.json.
+pytest-homeassistant-custom-component==0.13.375  # homeassistant==2026.10.4
+aiohttp_sse==2.2.0  # mcp_server's requirements, for the MCP listing test
+mcp==1.28.1
+anyio==4.14.2
+gazetteer-matcher==1.1.0  # conversation's (llm tool calls import it)
+hassil==3.12.1  # conversation's (llm tool calls import it)
+home-assistant-intents==2026.10.6  # conversation's (llm tool calls import it)

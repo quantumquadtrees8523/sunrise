@@ -1,0 +1,12 @@
+{
+  "name": "sunrise",
+  "description": "Sunrise for Home Assistant: the Claude Code side",
+  "owner": { "name": "Sunrise contributors" },
+  "plugins": [
+    {
+      "name": "sunrise",
+      "source": "./claude-plugin",
+      "description": "Fresh-install Sunrise on a Home Assistant box (backup, HACS, the integration, MCP) and verify it on a real device."
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sunrise",
+        "description": "Adds agent skills and a set of tools for your own AI agent, served through Home Assistant's MCP Server as the \"Sunrise\" API. Everything stays on your home network."
+      }
+    },
+    "abort": {
+      "already_configured": "Sunrise is already set up.",
+      "single_instance_allowed": "Sunrise is already set up."
+    }
+  }
+}
