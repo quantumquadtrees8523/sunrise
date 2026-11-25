@@ -15,7 +15,7 @@ from custom_components.sunrise.store import frontmatter, validate_skill
 
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS = sorted(p for p in (ROOT / "skills").glob("*/SKILL.md"))
-V0 = {"build-a-skill", "wifi-diagnosis"}
+V0 = {"build-a-skill", "device-diagnosis", "improve-home", "wifi-diagnosis"}
 
 
 def test_the_v0_skills_are_all_here() -> None:

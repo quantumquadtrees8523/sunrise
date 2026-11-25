@@ -22,7 +22,9 @@ It works out of the box, and you can change every part of it. It's free and open
 | Skill | Use it when | Needs the internet? |
 |---|---|---|
 | `build-a-skill` | "make this repeatable": builds a skill from a request or from work just done, your way, tested and backed up | no |
-| `wifi-diagnosis` | devices keep dropping or won't come back: measures, reads the router with you signed in, fixes in order | only to look up your router and devices |
+| `device-diagnosis` | a device can't be reached, is flaky, slow or wrong: finds the failing layer (power, network, the maker's service, the device, Home Assistant), fixes what software can, and looks at the hardware if you allow a camera or send a photo | only to look up the device |
+| `wifi-diagnosis` | devices keep dropping or won't come back: measures, reads the router with you signed in, fixes in order. `device-diagnosis` hands over to it when the evidence says Wi-Fi | only to look up your router and devices |
+| `improve-home` | "how could my home be smarter?": at most five ideas, each with evidence from your house; builds the ones you pick, tested and undoable; never pitches the same idea twice | only for ideas that use a cloud service |
 
 `skills/_shared/HOUSE-BASICS.md` is the reference every skill follows: find, act, read back.
 Without the internet a skill says what it can't look up and carries on with what it can do.

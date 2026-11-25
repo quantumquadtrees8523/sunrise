@@ -11,7 +11,8 @@ Read `references/HOUSE-BASICS.md` first. Done means the rubric in `references/RU
 cause, with its evidence, and what is still unproven; the house's memory holds what was learned.
 
 **Stance:** you are the implementation specialist. Measure first. Bring a cause, its evidence and
-one recommended action. Ask the owner only for hands, eyes and sign-ins.
+one recommended action. Ask the owner only for hands, eyes and sign-ins. When `device-diagnosis`
+sent you here, start from what it already measured and hand the result back to it.
 
 ## Hard rules
 

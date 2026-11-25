@@ -77,7 +77,7 @@ Report pass or fail for each:
 - [ ] HACS is loaded, with Sunrise shown as installed at the expected version
 - [ ] the Sunrise config entry is loaded, with the log clean
 - [ ] the MCP tool list includes Sunrise's tools (`house_map`, `act`, `list_skills`, `memory_list`, …)
-- [ ] `list_skills` returns the bundled skills (`build-a-skill`, `wifi-diagnosis`)
+- [ ] `list_skills` returns every skill in the repo's `skills/` folder (compare with the README's table), each readable with `get_skill`
 - [ ] `memory_list` answers, and `sensor.sunrise_memory` exists in Home Assistant
 - [ ] `act` turns the test device off, then on, each returning CHECKED and confirmed by a direct read
 - [ ] nothing else changed: the other integrations are still loaded

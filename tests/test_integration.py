@@ -75,7 +75,7 @@ async def test_built_in_skills_installed_outside_custom_components(hass: HomeAss
     await setup_integration(hass)
     res = await call(hass, "list_skills")
     names = {s["name"] for s in res.data["skills"]}
-    assert names == {"build-a-skill", "wifi-diagnosis"}
+    assert names == {"build-a-skill", "device-diagnosis", "improve-home", "wifi-diagnosis"}
     folder = hass.config.path("sunrise", "skills", "build-a-skill")
     assert "custom_components" not in folder
     got = await call(hass, "get_skill", {"name": "build-a-skill", "include_references": True})
