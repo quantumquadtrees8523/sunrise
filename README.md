@@ -13,7 +13,7 @@ It works out of the box, and you can change every part of it. It's free and open
   your home network.
 - **Safe by rule.** Its tools never touch the router, Wi-Fi or passwords; a skill may read or change
   the router only after you sign in yourself and say yes to each change. It never locks, unlocks or
-  opens anything without your yes. It backs up before a change, and every change can be undone.
+  opens anything without your yes. It takes a local checkpoint before a change, and every change can be undone.
 - **Judged by you.** A skill run counts as a success only if it worked *and* a non-technical
   person would be happy with how it went ([the rubric](skills/_shared/RUBRIC.md)).
 
@@ -21,10 +21,23 @@ It works out of the box, and you can change every part of it. It's free and open
 
 | Skill | Use it when | Needs the internet? |
 |---|---|---|
-| `build-a-skill` | "make this repeatable": builds a skill from a request or from work just done, your way, tested and backed up | no |
-| `device-diagnosis` | a device can't be reached, is flaky, slow or wrong: finds the failing layer (power, network, the maker's service, the device, Home Assistant), fixes what software can, and looks at the hardware if you allow a camera or send a photo | only to look up the device |
-| `wifi-diagnosis` | devices keep dropping or won't come back: measures, reads the router with you signed in, fixes in order. `device-diagnosis` hands over to it when the evidence says Wi-Fi | only to look up your router and devices |
-| `improve-home` | "how could my home be smarter?": at most five ideas, each with evidence from your house; builds the ones you pick, tested and undoable; never pitches the same idea twice | only for ideas that use a cloud service |
+| `learn-the-house` | first run, or "get to know my house": reads Home Assistant, asks at most five questions, fills memory, shows what it now knows | no |
+| `add-a-device` | "I bought a new light": identifies it, gives you the pairing steps, names it, puts it in its room, tests it | only to look up the device |
+| `routines` | "do X when Y": restates it, checks it, saves it, runs it once to test, puts things back; change or remove one the same way | no |
+| `device-diagnosis` | a device can't be reached, is flaky, slow or wrong: finds the failing layer, fixes what software can, and looks at the hardware if you allow a camera or send a photo | only to look up the device |
+| `wifi-diagnosis` | devices keep dropping or won't come back: measures, reads the router with you signed in, fixes in order | only to look up your router and devices |
+| `improve-home` | "how could my home be smarter?": at most five ideas, each with evidence from your house; builds the ones you pick; never pitches the same idea twice | only for ideas that use a cloud service |
+| `undo` | "what did you change?", "put it back": lists recent changes and undoes them, smallest step first | no |
+| `build-a-skill` | "make this repeatable": builds a skill from a request or from work just done, your way, tested | no |
+
+**Building blocks.** The tools are the shared primitives: map the house, act with read-back,
+diagnose, routines, checkpoint, undo, memory. The skills are repeatable jobs built on them. A
+bigger request chains skills, each finishing its own check before the next starts
+(`add-a-device` then `routines`; `device-diagnosis` then `wifi-diagnosis`). A handoff is one
+line in a skill naming the other skill and when; there is nothing else to configure.
+
+**Checkpoints are local.** Before a change that can't be undone in one step, Sunrise makes a
+Home Assistant backup on this machine only. Nothing is sent anywhere.
 
 `skills/_shared/HOUSE-BASICS.md` is the reference every skill follows: find, act, read back.
 Without the internet a skill says what it can't look up and carries on with what it can do.
@@ -47,7 +60,7 @@ Plain Markdown in `<config>/sunrise/memory/` that the agent writes and you can o
 
 Served as the **Sunrise** API: `house_map`, `act` (does it, then reads it back: CHECKED / NOT
 CONFIRMED / UNREACHABLE), `audit`, `profile_get`, `profile_update`, `diagnose_device`, `fix_device`,
-`registry_edit`, `undo`, `backup`, `network_check`, `usage`, `suggestions`, `list_skills`,
+`registry_edit`, `routine` (automations: check, save, try, delete), `changes`, `undo`, `backup` (a local checkpoint), `network_check`, `usage`, `suggestions`, `list_skills`,
 `get_skill`, `skill_update`, `skill_history`, `skill_revert`, `memory_list`, `memory_read`,
 `memory_write`, `memory_delete`, `memory_history`, `memory_revert`, `log_run`. Each declares honest
 read-only / destructive annotations. The API's prompt (the MCP prompt "Sunrise") carries the fixed

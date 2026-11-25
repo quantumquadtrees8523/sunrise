@@ -100,6 +100,11 @@ Then `skill_update` with the text and `reason: "new skill: ..."`, and read it ba
 `get_skill`. Save this house's facts with `memory_write`. Tell the owner in a few lines: what the
 skill does, what went to memory, which mistakes became guards, and what is still unproven.
 
+## Hands off to / called from
+
+A skill that is really a "do X when Y": `routines`. A live test that went wrong: `undo`.
+Called from `improve-home`.
+
 ## Share (optional)
 
 Offer to write a copy with names and addresses replaced by placeholders for the person to share

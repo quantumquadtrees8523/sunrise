@@ -6,7 +6,7 @@ How to operate a Home Assistant house safely. Not a skill by itself: every skill
 
 These skills assume the Sunrise integration's tools, reached through Home Assistant's MCP
 Server (endpoint `/api/mcp/sunrise`). Their names are `house_map`, `act`, `audit`,
-`profile_get`, `profile_update`, `diagnose_device`, `fix_device`, `registry_edit`, `undo`, `backup`,
+`profile_get`, `profile_update`, `diagnose_device`, `fix_device`, `registry_edit`, `routine`, `changes`, `undo`, `backup`,
 `network_check`, `usage`, `suggestions`, `list_skills`, `get_skill`, `skill_update`, `skill_history`,
 `skill_revert`, `log_run`, `memory_list`, `memory_read`, `memory_write`, `memory_delete`, `memory_history`,
 `memory_revert`. When several of Home Assistant's APIs are combined, the same tools appear
@@ -67,7 +67,7 @@ Never claim a change without proof from this run. Never retry a device that is u
 ## Internet
 
 Everything here works on the home network alone. A step that needs the internet (looking up a
-device's manual, a web search, a cloud account like the WiZ or My Spectrum app) says so, and offline
+device's manual, a web search, a maker's account or app) says so, and offline
 you say "I can't look that up without the internet" and carry on with what you can do locally.
 
 ## Logging

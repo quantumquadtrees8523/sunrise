@@ -13,7 +13,7 @@ This skill lives on the Claude side: Sunrise's own skills sit behind HA's MCP se
 Act as the implementation specialist. Do every step you can yourself, and stop only for the steps that need the owner. Those are listed under "Owner steps", with the exact wording to use.
 
 ## Hard rules
-- Back up Home Assistant before the first change and confirm the backup is listed.
+- Take a checkpoint before the first change: a Home Assistant backup kept on the box only (no cloud location). Confirm it's listed.
 - Never type, print or store passwords, tokens or the GitHub device code's result. Never print env files.
 - One change, then check it. Don't upgrade Home Assistant as a side effect; if a minimum version blocks the install, stop and say so.
 - If something is already installed (HACS, Sunrise), don't reinstall over it. Report what's there and continue from the first missing step.
@@ -39,7 +39,7 @@ Act as the implementation specialist. Do every step you can yourself, and stop o
 **Exit:** a shell, the config path, the versions, a list of what's already installed, and a test device (or a note that there is none).
 
 ## Phase 1: back up
-Create an HA backup (Settings → System → Backups, or the `backup.create` action), named `before-sunrise-<date>`. Confirm it's listed.
+Create a local HA backup (Settings → System → Backups, with only the local location selected, or the `backup.create` action), named `before-sunrise-<date>`. Confirm it's listed.
 
 ## Phase 2: HACS
 1. Install HACS's files with its official script, run where HA's config is:
@@ -76,7 +76,7 @@ Report pass or fail for each:
 - [ ] the backup is listed
 - [ ] HACS is loaded, with Sunrise shown as installed at the expected version
 - [ ] the Sunrise config entry is loaded, with the log clean
-- [ ] the MCP tool list includes Sunrise's tools (`house_map`, `act`, `list_skills`, `memory_list`, …)
+- [ ] the MCP tool list includes Sunrise's tools (`house_map`, `act`, `routine`, `changes`, `list_skills`, `memory_list`, …)
 - [ ] `list_skills` returns every skill in the repo's `skills/` folder (compare with the README's table), each readable with `get_skill`
 - [ ] `memory_list` answers, and `sensor.sunrise_memory` exists in Home Assistant
 - [ ] `act` turns the test device off, then on, each returning CHECKED and confirmed by a direct read

@@ -15,7 +15,7 @@ from custom_components.sunrise.store import frontmatter, validate_skill
 
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS = sorted(p for p in (ROOT / "skills").glob("*/SKILL.md"))
-V0 = {"build-a-skill", "device-diagnosis", "improve-home", "wifi-diagnosis"}
+V0 = {"add-a-device", "build-a-skill", "device-diagnosis", "improve-home", "learn-the-house", "routines", "undo", "wifi-diagnosis"}
 
 
 def test_the_v0_skills_are_all_here() -> None:
@@ -58,6 +58,18 @@ def test_the_router_rule_reads_the_same_everywhere() -> None:
         flat = " ".join(text.split())
         assert "yes to each change" in flat or "yes to this one change" in flat
         assert "password" in flat
+
+
+def test_every_handoff_names_a_skill_that_exists_and_every_skill_says_its_handoffs() -> None:
+    """Skills chain by naming each other in one line; a name that isn't a shipped skill is a dead end."""
+    from custom_components.sunrise.api import RULES  # noqa: PLC0415
+
+    for path in SKILLS:
+        text = path.read_text(encoding="utf-8")
+        assert "## Hands off to / called from" in text, path.parent.name
+        named = set(re.findall(r"`([a-z]+(?:-[a-z]+)+)`", text))
+        assert named <= V0, (path.parent.name, named - V0)
+    assert set(re.findall(r"\b([a-z]+(?:-[a-z]+){1,2})\b(?= then| first)", RULES)) <= V0
 
 
 def test_house_basics_is_not_a_skill() -> None:

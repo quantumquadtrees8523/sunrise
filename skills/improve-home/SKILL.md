@@ -72,11 +72,9 @@ Record each with `suggestions` op=record (idea, status pitched, evidence) as you
 For each, one at a time:
 
 1. `backup`, and confirm it.
-2. Draft it with the house's real devices. Say in one sentence what will happen and when.
-3. Dry run: read-only walk through; list what it would change.
-4. Create it. Live test: trigger it, read every change back (`CHECKED`), then put things back.
-5. If it should become a repeatable routine for the agent, hand it to `build-a-skill`.
-6. A failed step means fix or stop, never "leave it on anyway".
+2. A "do X when Y": run `routines` (it checks, saves, tests and puts things back).
+3. A repeatable job for the agent rather than an automation: run `build-a-skill`.
+4. A failed step means fix or stop, never "leave it on anyway".
 
 For tidy-ups use `registry_edit`, one approved change at a time; each can be undone with `undo`.
 For fragile devices, run `device-diagnosis`.
@@ -95,6 +93,11 @@ and what it unlocks. Offer to set it up when it arrives. No brands unless they a
 - `log.md`: date, what was pitched, what was built, test results.
 
 Then `log_run`.
+
+## Hands off to / called from
+
+Build an idea: `routines` or `build-a-skill`. Fragile devices: `device-diagnosis`. After a purchase: `add-a-device`.
+Called from `learn-the-house`.
 
 ## Words for the owner
 

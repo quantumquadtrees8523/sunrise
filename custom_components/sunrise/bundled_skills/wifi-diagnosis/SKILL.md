@@ -11,8 +11,7 @@ Read `references/HOUSE-BASICS.md` first. Done means the rubric in `references/RU
 cause, with its evidence, and what is still unproven; the house's memory holds what was learned.
 
 **Stance:** you are the implementation specialist. Measure first. Bring a cause, its evidence and
-one recommended action. Ask the owner only for hands, eyes and sign-ins. When `device-diagnosis`
-sent you here, start from what it already measured and hand the result back to it.
+one recommended action. Ask the owner only for hands, eyes and sign-ins.
 
 ## Hard rules
 
@@ -126,6 +125,10 @@ A power-cycle is one off and one on. Flicking a smart bulb several times can put
 - `owner.md`: anything they told you about how they want this handled.
 
 Then `log_run`.
+
+## Hands off to / called from
+
+Called from `device-diagnosis` and `add-a-device`: start from what they measured, and hand the result back.
 
 ## Words for the owner
 

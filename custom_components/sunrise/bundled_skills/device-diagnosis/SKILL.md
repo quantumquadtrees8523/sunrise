@@ -115,11 +115,16 @@ A power-cycle is one off and one on. Flicking some devices several times resets 
 
 - `playbooks/<brand or connection type>.md`: what its lights mean, how it behaves after a power
   cycle, how to pair it, known faults, sources.
-- `house.md`: what is off on purpose, switches and what they feed, the test device (dated).
+- `house.md`: what is off on purpose, switches and what they feed (dated).
 - `log.md`: date, symptom, evidence, each step and its result, the cause, proven or not, follow-ups.
 - `owner.md`: how they want this kind of thing handled.
 
 Then `log_run`.
+
+## Hands off to / called from
+
+Wi-Fi evidence: `wifi-diagnosis`. A change made things worse: `undo`.
+Called from `add-a-device`, `routines`, `improve-home` and `learn-the-house`.
 
 ## Words for the owner
 
