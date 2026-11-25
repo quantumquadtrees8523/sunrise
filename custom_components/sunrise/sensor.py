@@ -1,7 +1,8 @@
 """sensor.sunrise_memory: what the agent remembers, where the owner can see it in Home Assistant.
 
 State: the number of memory files. Attributes: each file's name, first line and when it last
-changed, plus the folder they live in. The files themselves are plain Markdown on disk.
+changed, the folder they live in, and the latest change to the agent's behavior (skills or memory):
+when, who and why. The files themselves are plain Markdown on disk, in a git repository.
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ class MemorySensor(SensorEntity):
     def __init__(self, rt) -> None:
         self._rt = rt
         self._files: list[dict[str, Any]] = []
+        self._last: dict[str, Any] | None = None
 
     @callback
     def changed(self) -> None:
@@ -44,6 +46,7 @@ class MemorySensor(SensorEntity):
 
     async def async_update(self) -> None:
         self._files = await self.hass.async_add_executor_job(self._rt.store.memory_list)
+        self._last = await self.hass.async_add_executor_job(self._rt.store.last_commit)
 
     @property
     def native_value(self) -> int:
@@ -52,6 +55,8 @@ class MemorySensor(SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         newest = sorted(self._files, key=lambda f: f["changed"], reverse=True)[:SHOWN]
+        last = self._last or {}
         return {"folder": str(self._rt.store.memory_dir),
+                "last_change": last.get("when"), "last_change_by": last.get("author"), "last_change_why": last.get("reason"),
                 "files": [{"name": f["name"], "first_line": f["first_line"],
                            "changed": datetime.fromtimestamp(f["changed"], UTC).isoformat(timespec="seconds")} for f in newest]}

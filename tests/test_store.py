@@ -1,6 +1,5 @@
-"""Skills are checkpointed and revertable: every write saves a checkpoint (version, time, author,
-reason, diff) first, a revert is a new version, a user-edited built-in is theirs, and an edit that
-weakens a safety rule is refused."""
+"""Skills live in git: every write is one commit (who, why), a revert is a new commit, a user-edited
+built-in is theirs, and an edit that weakens a safety rule is refused."""
 
 from __future__ import annotations
 
@@ -8,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from custom_components.sunrise.store import SkillError, Store, sanitize, score, weakens_rules
+from custom_components.sunrise.store import BehaviorError, SkillError, Store, sanitize, score, weakens_rules
 
 ROOT = Path(__file__).resolve().parent.parent
 SHIPPED = ROOT / "custom_components" / "sunrise" / "bundled_skills"
@@ -19,21 +18,68 @@ def skill(name: str, body: str = "Do the thing. Then read back. Never touch the 
            f"Read references/HOUSE-BASICS.md. Done means references/RUBRIC.md passes.\n\n{body}\n"
 
 
-def test_write_checkpoints_and_revert(tmp_path) -> None:
+def test_each_write_is_a_commit_and_a_revert_is_a_new_one(tmp_path) -> None:
     s = Store(tmp_path)
     c1 = s.write("morning", skill("morning"), author="user", reason="new skill")
-    assert c1["version"] == 1
+    assert c1["commit"] and c1["changed"]
     c2 = s.write("morning", skill("morning", "Do the thing. Then read back. Never touch the router. Say how to undo. "
                                              "The kitchen bulb is on the stairs switch."), author="agent", reason="house detail")
-    assert c2["version"] == 2 and "+" in c2["diff"]
-    hist = s.history("morning")
-    assert [h["version"] for h in hist] == [1, 2] and hist[1]["author"] == "agent" and hist[1]["reason"] == "house detail"
-    r = s.revert("morning", 1)
-    assert r["version"] == 3 and s.read("morning") == skill("morning")
-    assert s.history("morning")[-1]["reason"] == "revert to version 1"
+    assert c2["commit"] != c1["commit"] and "+" in c2["diff"]
+    hist = s.behavior_log("morning")
+    assert [h["reason"] for h in hist] == ["house detail", "new skill"] and [h["author"] for h in hist] == ["agent", "user"]
+    assert hist[0]["files"] == ["M skills/morning/SKILL.md"]
+    assert "stairs switch" in s.behavior_log(commit=c2["commit"])[0]["diff"]
+    r = s.behavior_revert(c2["commit"], author="user")
+    assert r["changed"] and s.read("morning") == skill("morning")
+    assert s.behavior_log("skills/morning")[0]["reason"] == f'undo "house detail" ({c2["commit"]})'
+    assert len(s.behavior_log("morning")) == 3  # history is added to, never rewritten
     assert s.write("morning", skill("morning"), author="user", reason="same")["changed"] is False
-    with pytest.raises(SkillError):
-        s.revert("morning", 9)
+    with pytest.raises(BehaviorError):
+        s.behavior_revert("0000000")
+    with pytest.raises(BehaviorError):
+        s.behavior_revert("--hard")
+
+
+def test_the_repository_tracks_behavior_only_and_has_no_remote(tmp_path) -> None:
+    s = Store(tmp_path)
+    s.write("morning", skill("morning"), author="user", reason="new skill")
+    s.memory_write("house.md", "# House\nTwo floors.", reason="first look")
+    s.put("audit", {"x": 1})
+    s.append("runs", {"skill": "morning"})
+    (tmp_path / "secrets.yaml").write_text("wifi: hunter2", encoding="utf-8")
+    s.behavior_log()  # anything changed on disk is committed first
+    tracked = set(s.git.run("ls-files").split())
+    assert tracked == {".gitignore", "memory/house.md", "skills/morning/SKILL.md"}
+    assert s.git.run("status", "--short").strip() == ""  # everything else is ignored
+    assert s.git.run("remote").strip() == ""
+    assert not (tmp_path / "history").exists() and not (tmp_path / "memory_history").exists()
+
+
+def test_an_edit_made_by_hand_is_committed_as_the_users(tmp_path) -> None:
+    s = Store(tmp_path)
+    s.memory_write("house.md", "# House\nTwo floors.", reason="first look")
+    (tmp_path / "memory" / "house.md").write_text("# House\nThree floors.\n", encoding="utf-8")
+    top = s.behavior_log("house.md")[0]
+    assert top["author"] == "user" and top["reason"] == "edited on disk"
+
+
+def test_one_file_can_go_back_to_an_earlier_commit(tmp_path) -> None:
+    s = Store(tmp_path)
+    one = s.memory_write("house.md", "# House\nTwo floors.", reason="first look")
+    s.memory_write("owner.md", "# Owner\nShort answers.", reason="they said so")
+    s.memory_write("house.md", "# House\nThree floors.", reason="recount")
+    back = s.behavior_revert(one["commit"], "house.md", reason="the recount was wrong")
+    assert back["files"] == ["M memory/house.md"] and "Two floors" in s.memory_read("house.md")
+    assert "Short answers" in s.memory_read("owner.md")  # nothing else moved
+    assert s.behavior_revert(one["commit"], "house.md")["changed"] is False
+    with pytest.raises(BehaviorError, match="didn't exist"):
+        s.behavior_revert(one["commit"], "owner.md")
+
+
+def test_without_git_the_error_says_what_to_do(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("PATH", str(tmp_path))
+    with pytest.raises(BehaviorError, match="needs the git program"):
+        Store(tmp_path / "data").memory_write("house.md", "# House", reason="r")
 
 
 def test_refuses_invalid_and_weakening_edits(tmp_path) -> None:
@@ -52,7 +98,7 @@ def test_refuses_invalid_and_weakening_edits(tmp_path) -> None:
     with pytest.raises(SkillError, match="weaken"):
         s.write("x-y", skill("x-y", "Do the thing. Then read back. Never touch the router. Say how to undo. "
                                      "Skip the backup to save time."), author="agent", reason="faster")
-    assert s.history("x-y")[-1]["version"] == 1
+    assert [h["reason"] for h in s.behavior_log("x-y")] == ["new"]
 
 
 def test_built_ins_follow_the_product_until_the_user_edits_them(tmp_path) -> None:
@@ -87,7 +133,11 @@ def test_built_ins_follow_the_product_until_the_user_edits_them(tmp_path) -> Non
     listed = {x["name"]: x for x in s.list()}
     assert listed["build-a-skill"]["user_edited"] and listed["build-a-skill"].get("update_available")
     assert not listed["other-skill"]["user_edited"]
-    assert s.history("other-skill")[-1]["author"] == "product"
+    assert s.behavior_log("other-skill")[0]["author"] == "product" and s.behavior_log("other-skill")[0]["reason"] == "Sunrise 0.2.0: built-in skills"
+    # Putting their copy back to the shipped text makes it a built-in again.
+    first = s.behavior_log("build-a-skill")[-1]["commit"]
+    s.behavior_revert(first, "build-a-skill")
+    assert not {x["name"]: x for x in s.list()}["build-a-skill"]["user_edited"]
 
 
 def test_weakens_rules_spots_dropped_safety_words() -> None:

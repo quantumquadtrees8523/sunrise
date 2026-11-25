@@ -109,25 +109,20 @@ async def test_audit_finds_the_problems(hass: HomeAssistant, house) -> None:
     assert "Kitchen Pendant 2" in again.data["changed_since_last"]["back_now"]
 
 
-async def test_profile_detects_and_merges(hass: HomeAssistant, house) -> None:
-    res = await call(hass, "profile_get", {"refresh": True})
-    p = res.data
-    assert p["isp"] == "fios"
+async def test_house_map_says_how_the_house_is_set_up(hass: HomeAssistant, house) -> None:
+    res = await call(hass, "house_map")
+    p = res.data["setup"]
+    assert p["isp_guess"] == "fios"
     assert "binary_sensor.fios_router_wan_status" in p["router"]["sensors"]
-    assert p["counts"]["entities"] == 167  # the sample house plus sensor.sunrise_memory
+    assert res.data["counts"]["entities"] == 167  # the sample house plus sensor.sunrise_memory
     assert p["access"]["sunrise_tools"] is True and p["access"]["mcp_server"] is False
-    upd = await call(hass, "profile_update", {"updates": {"access": {"ssh": True}, "quirks": ["hallway bulb is on the stairs switch"]}})
-    assert upd.data["access"]["ssh"] is True and upd.data["access"]["sunrise_tools"] is True
-    again = await call(hass, "profile_get", {"refresh": True})
-    assert again.data["quirks"] == ["hallway bulb is on the stairs switch"]
-    bad = await call(hass, "profile_update", {"updates": {"password": "x"}})
-    assert bad.error
+    assert "setup" not in (await call(hass, "house_map", {"room": "Kitchen"})).data
 
 
-async def test_profile_install_type(hass: HomeAssistant, house) -> None:
+async def test_setup_install_type(hass: HomeAssistant, house) -> None:
     with patch("homeassistant.helpers.system_info.async_get_system_info", return_value={"installation_type": "Home Assistant Container"}):
-        res = await call(hass, "profile_get", {"refresh": True})
-    assert res.data["install_type"] == "container"
+        res = await call(hass, "house_map")
+    assert res.data["setup"]["install_type"] == "container"
 
 
 async def test_registry_edits_read_back_and_undo(hass: HomeAssistant, house) -> None:
@@ -280,12 +275,6 @@ async def test_backup_without_backup_integration_says_dont_change(hass: HomeAssi
     res = await call(hass, "backup", {"op": "create"})
     assert res.data["confirmed"] is False
 
-
-async def test_suggestions_are_remembered(hass: HomeAssistant, house) -> None:
-    await call(hass, "suggestions", {"op": "record", "idea": "Porch light on at sunset", "status": "declined", "evidence": "11 of 14 days"})
-    await call(hass, "suggestions", {"op": "record", "idea": "porch light  on at sunset", "status": "declined"})
-    res = await call(hass, "suggestions", {"op": "list"})
-    assert len(res.data["suggestions"]) == 1 and res.data["suggestions"][0]["status"] == "declined"
 
 
 async def test_log_run_scores_lists_and_exports_stripped(hass: HomeAssistant, house) -> None:

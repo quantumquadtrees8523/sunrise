@@ -62,7 +62,7 @@ async def test_a_full_tool_run_stays_on_the_home_network(hass, socket_enabled) -
     from custom_components.sunrise import net as N
 
     entry.runtime_data.net = N.Net(probe_timeout=0.05, discover_timeout=0.1, broadcast=True, sweep=[])
-    for tool, args in [("profile_get", {"refresh": True}), ("house_map", {}), ("audit", {}), ("list_skills", {}),
+    for tool, args in [("house_map", {}), ("behavior_log", {}), ("audit", {}), ("list_skills", {}),
                        ("diagnose_device", {"target": "Kitchen Pendant 2"}), ("log_run", {"op": "export"})]:
         res = await call(hass, tool, args)
         assert not res.error, (tool, res.data)

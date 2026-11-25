@@ -23,7 +23,7 @@ from homeassistant.helpers import entity_registry as er
 
 from . import net as N
 from .const import RELOAD_WAIT_S
-from .house import system_log_counts
+from .house import setup_facts, system_log_counts
 from .store import Store
 
 TCP_PORTS = {"esphome": 6053}
@@ -257,7 +257,7 @@ async def network_check(hass: HomeAssistant, store: Store, net: N.Net) -> dict[s
     probes = await asyncio.gather(*(hass.async_add_executor_job(N.wiz_probe, d.host, net) for d in wiz))
     signal = sorted(({"device": d.name, "room": d.room, "rssi": p["rssi"], "signal": N.signal_words(p["rssi"])}
                      for d, p in zip(wiz, probes, strict=True) if p.get("answers") and p.get("rssi") is not None), key=lambda x: x["rssi"])
-    prof = await hass.async_add_executor_job(store.get, "profile", {}) or {}
+    setup = await setup_facts(hass)
     findings = []
     if wan is not None:
         findings.append("The internet connection is up." if str(wan).lower() in ("on", "connected", "up", "true") else
@@ -269,6 +269,6 @@ async def network_check(hass: HomeAssistant, store: Store, net: N.Net) -> dict[s
     if weak:
         findings.append(f"{len(weak)} of the bulbs that answer have a weak signal.")
     errors = {k: v["count"] for k, v in system_log_counts(hass).items() if k in {d.integration for d in wifi_like}}
-    return {"isp": prof.get("isp", "unknown"), "router": router, "internet": wan, "gateway": gateway,
+    return {"isp_guess": setup["isp_guess"], "router": router, "internet": wan, "gateway": gateway,
             "wifi_devices": {"total": len(wifi_like), "unreachable": len(down)}, "wiz_signal": signal, "errors_since_start": errors,
             "findings": findings, "rule": "These tools never change router settings or passwords. Give the person steps, or follow a skill that covers the router with their yes."}

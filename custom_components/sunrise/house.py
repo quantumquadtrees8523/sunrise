@@ -101,7 +101,7 @@ async def house_map(hass: HomeAssistant, room: str | None = None, everything: bo
     for area_id, r in sorted(rooms.items(), key=lambda kv: (kv[0] is None, kv[1]["room"] or "")):
         out.append({**{k: v for k, v in r.items() if k != "devices"}, "devices": list(r["devices"].values()),
                     **({"note": "these have no room"} if area_id is None else {})})
-    return {"rooms": out, "counts": counts(hass)}
+    return {"rooms": out, "counts": counts(hass), **({} if room else {"setup": await setup_facts(hass)})}
 
 
 def nearest(hass: HomeAssistant, entity_id: str, n: int = 3) -> list[str]:
@@ -447,12 +447,14 @@ async def undo(hass: HomeAssistant, store: Store, change_id: str) -> dict[str, A
     return {"ok": True, "undone": op, "target": target}
 
 
-# --- profile ------------------------------------------------------------------------------------
+# --- the setup: what Home Assistant itself can tell ----------------------------------------------
 
 ISP_HINTS = (("fios", re.compile(r"fios|verizon|cr1000", re.I)), ("spectrum", re.compile(r"spectrum|charter|sagemcom|askey", re.I)))
 
 
-async def detect_profile(hass: HomeAssistant) -> dict[str, Any]:
+async def setup_facts(hass: HomeAssistant) -> dict[str, Any]:
+    """How this Home Assistant is installed and reached, detected fresh each time. What only people
+    know (the provider, the router, quirks) lives in the memory file house.md."""
     from homeassistant.helpers.system_info import async_get_system_info  # noqa: PLC0415
 
     try:
@@ -484,44 +486,10 @@ async def detect_profile(hass: HomeAssistant) -> dict[str, Any]:
         remote.append("nabu_casa_possible")
     if hass.config.external_url:
         remote.append("external_url_set")
-    c = counts(hass)
     return {"install_type": kind, "install_type_words": install, "ha_version": HA_VERSION,
             "access": {"sunrise_tools": True, "mcp_server": bool(mcp),
                        "mcp_serves_this_api": LLM_API_ID in served or "all" in served},
-            "counts": c, "isp": isp, "router": router, "remote_access": remote or ["none_detected"],
-            "detected_at": dt_util.utcnow().isoformat(timespec="minutes")}
-
-
-PROFILE_FIELDS = ("access", "isp", "router", "remote_access", "notes", "quirks")
-
-
-async def profile_get(hass: HomeAssistant, store: Store, refresh: bool = False) -> dict[str, Any]:
-    prof = await hass.async_add_executor_job(store.get, "profile", None)
-    stale = not prof or time.time() - prof.get("_ts", 0) > 7 * 86400
-    if refresh or stale:
-        det = await detect_profile(hass)
-        kept = {k: v for k, v in (prof or {}).items() if k in ("notes", "quirks", "agent")}
-        if prof and prof.get("isp") not in (None, "unknown") and det["isp"] == "unknown":
-            kept["isp"] = prof["isp"]  # a person told us; detection can't see it
-        if prof and isinstance(prof.get("access"), dict):
-            det["access"] = {**prof["access"], **det["access"]}
-        prof = {**det, **kept, "_ts": time.time()}
-        await hass.async_add_executor_job(store.put, "profile", prof)
-    return prof
-
-
-async def profile_update(hass: HomeAssistant, store: Store, updates: dict[str, Any]) -> dict[str, Any]:
-    bad = [k for k in updates if k not in PROFILE_FIELDS]
-    if bad:
-        raise HomeAssistantError(f"unknown profile fields {bad}; allowed: {', '.join(PROFILE_FIELDS)}")
-    prof = await profile_get(hass, store)
-    for k, v in updates.items():
-        if isinstance(v, dict) and isinstance(prof.get(k), dict):
-            prof[k] = {**prof[k], **v}
-        else:
-            prof[k] = v
-    await hass.async_add_executor_job(store.put, "profile", prof)
-    return await hass.async_add_executor_job(store.get, "profile", {})
+            "isp_guess": isp, "router": router, "remote_access": remote or ["none_detected"]}
 
 
 # --- usage -----------------------------------------------------------------------------------------

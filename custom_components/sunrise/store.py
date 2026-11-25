@@ -2,15 +2,18 @@
 integration update never overwrites them). Plain Python, no Home Assistant imports: blocking file
 I/O, so Home Assistant code calls it in the executor.
 
-<config>/sunrise/
+<config>/sunrise/                  a git repository: the agent's behavior, one commit per change
   skills/<name>/SKILL.md          the live text of every skill (built-in copies and the user's own)
   skills/<name>/references/       RUBRIC.md and HOUSE-BASICS.md, rewritten from the shipped copy
-  history/<name>/v0001.json ...   one checkpoint per write: version, time, author, reason, diff, text
-  skills.json                     per skill: origin, version, shipped hash, user_edited
   memory/**/*.md                  what the agent remembers about this house and its owner: plain
                                   Markdown the owner can open, e.g. owner.md, house.md, playbooks/x.md
-  memory_history/<file>/v0001.json  one checkpoint per memory write or delete
-  profile.json, suggestions.json, audit.json, changes.jsonl, runs.jsonl
+  .gitignore                      only skills/ and memory/ are tracked; nothing else here ever is
+  skills.json                     per skill: origin, shipped hash, user_edited (not tracked)
+  audit.json, changes.jsonl, runs.jsonl   run data (not tracked)
+
+Git is the history: every skill or memory change is one commit (message: the reason; author: user,
+agent or product), read with `git log` and put back with a new commit. The repository has no
+remote and nothing here ever fetches or pushes. Home Assistant's own images ship the git binary.
 """
 
 from __future__ import annotations
@@ -18,8 +21,11 @@ from __future__ import annotations
 import difflib
 import hashlib
 import json
+import os
 import re
 import shutil
+import subprocess
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -130,14 +136,100 @@ def _write_json(path: Path, data: Any) -> None:
     tmp.replace(path)
 
 
+class BehaviorError(ValueError):
+    """A history read or revert that was refused; the message says why in plain words."""
+
+
+GITIGNORE = """# Sunrise tracks the agent's behavior only: its skills and its memory.
+# Run data, caches and anything else in this folder stay out of the history.
+/*
+!/.gitignore
+!/skills/
+!/memory/
+"""
+COMMIT_RX = re.compile(r"^[0-9a-f]{4,40}$")
+TRACKED = ("skills", "memory")
+DIFF_MAX = 6000
+
+
+class Git:
+    """The git repository at the data folder: fixed argv, no shell, no remote, no network. It
+    ignores every config outside the repository (a user's global hooks or signing can't interfere)
+    and names its own folder as safe, so it works whoever owns the files."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = Path(root)
+
+    def run(self, *args: str, check: bool = True) -> str:
+        env = {"PATH": os.environ.get("PATH") or "/usr/local/bin:/usr/bin:/bin", "LC_ALL": "C",
+               "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_TERMINAL_PROMPT": "0",
+               "GIT_DIR": str(self.root / ".git"), "GIT_WORK_TREE": str(self.root)}
+        try:
+            done = subprocess.run(["git", "-c", f"safe.directory={self.root}", "-c", "core.hooksPath=/dev/null", *args],  # noqa: S603, S607
+                                  cwd=self.root, env=env, capture_output=True, text=True, timeout=30, check=False)
+        except FileNotFoundError as exc:
+            raise BehaviorError("Sunrise needs the git program, which Home Assistant's own images include. "
+                                "Install git on this machine, then reload Sunrise.") from exc
+        except subprocess.TimeoutExpired as exc:
+            raise BehaviorError("git took too long; nothing was changed") from exc
+        if check and done.returncode != 0:
+            raise BehaviorError((done.stderr or done.stdout).strip().splitlines()[-1] if (done.stderr or done.stdout).strip() else "git failed")
+        return done.stdout
+
+    def init(self) -> bool:
+        """Make the repository if it isn't there. True when it was just created."""
+        self.root.mkdir(parents=True, exist_ok=True)
+        new = not (self.root / ".git").is_dir()
+        if new:
+            self.run("init", "-q", "-b", "main")
+            for key, value in (("user.name", "Sunrise"), ("user.email", "sunrise@localhost"), ("commit.gpgsign", "false"),
+                               ("core.autocrlf", "false"), ("gc.auto", "200")):
+                self.run("config", key, value)
+        ignore = self.root / ".gitignore"
+        if not ignore.is_file() or ignore.read_text(encoding="utf-8") != GITIGNORE:
+            ignore.write_text(GITIGNORE, encoding="utf-8")
+        return new
+
+    def commit(self, reason: str, author: str, paths: tuple[str, ...] = (".gitignore", *TRACKED)) -> str | None:
+        """Stage `paths` (whatever exists of them) and commit. Returns the short commit id, or None if nothing changed."""
+        here = [p for p in paths if (self.root / p).exists() or self.run("ls-files", "--", p).strip()]
+        if not here:
+            return None
+        self.run("add", "-A", "--", *here)
+        if not self.run("diff", "--cached", "--name-only", "--", *here).strip():
+            return None
+        message = " ".join((reason or "").split())[:200] or "change"
+        self.run("commit", "-q", "-m", message, f"--author={author} <{author}@sunrise.invalid>", "--", *here)
+        return self.run("rev-parse", "--short", "HEAD").strip()
+
+    def head(self) -> dict[str, Any] | None:
+        out = self.run("log", "-1", "--format=%h%x1f%an%x1f%aI%x1f%s", check=False).strip()
+        if not out:
+            return None
+        commit, author, when, reason = out.split("\x1f", 3)
+        return {"commit": commit, "author": author, "when": when, "reason": reason}
+
+
 class Store:
-    """Everything under one data folder."""
+    """Everything under one data folder. Skills and memory are its git-tracked part."""
 
     def __init__(self, root: Path) -> None:
         self.root = Path(root)
         self.skills_dir = self.root / "skills"
-        self.history_dir = self.root / "history"
         self.meta_path = self.root / "skills.json"
+        self.git = Git(self.root)
+        self._lock = threading.RLock()  # one git operation at a time
+        self._ready = False
+
+    def _repo(self) -> Git:
+        """The repository, created on first use. Files edited by hand since the last commit are
+        committed first (as the user's), so the history never loses what the owner wrote."""
+        if not self._ready:
+            if self.git.init():
+                self.git.commit("Sunrise starts keeping the agent's behavior in git", "product")
+            self._ready = True
+        self.git.commit("edited on disk", "user")
+        return self.git
 
     # --- skills -----------------------------------------------------------------------------
 
@@ -155,8 +247,8 @@ class Store:
         except OSError:
             return None
 
-    def write(self, name: str, text: str, *, author: str, reason: str, check_rules: bool = True) -> dict[str, Any]:
-        """The one way a skill's text changes: validate, checkpoint, write. Returns the checkpoint."""
+    def write(self, name: str, text: str, *, author: str, reason: str, check_rules: bool = True, commit: bool = True) -> dict[str, Any]:
+        """The one way a skill's text changes: validate, write, commit. Returns the commit."""
         if author not in AUTHORS:
             raise SkillError(f"author must be one of {', '.join(AUTHORS)}")
         if not (reason or "").strip():
@@ -165,51 +257,49 @@ class Store:
         problems = validate_skill(name, text)
         if problems:
             raise SkillError("Not saved: " + "; ".join(problems) + ".")
-        old = self.read(name) or ""
-        if old == text:
-            return {"name": name, "version": self.meta().get(name, {}).get("version", 0), "changed": False}
-        if check_rules and author != "product" and old:
-            weak = weakens_rules(old, text)
-            if weak:
-                raise SkillError("Not saved: the change would weaken the safety rules (" + "; ".join(weak) + ").")
-        meta = self.meta()
-        entry = meta.setdefault(name, {"origin": "product" if author == "product" else "user", "version": 0})
-        version = int(entry.get("version", 0)) + 1
-        checkpoint = {"name": name, "version": version, "ts": _now(), "author": author, "reason": reason.strip(),
-                      "diff": diff(old, text, name), "text": text, "previous_sha": sha(old) if old else None}
-        _write_json(self.history_dir / name / f"v{version:04d}.json", checkpoint)
-        path = self.skill_path(name)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-        entry["version"] = version
+        with self._lock:
+            old = self.read(name) or ""
+            if old == text:
+                return {"name": name, "changed": False}
+            if check_rules and author != "product" and old:
+                weak = weakens_rules(old, text)
+                if weak:
+                    raise SkillError("Not saved: the change would weaken the safety rules (" + "; ".join(weak) + ").")
+            git = self._repo() if commit else None
+            path = self.skill_path(name)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+            meta = self.meta()
+            entry = meta.setdefault(name, {"origin": "product" if author == "product" else "user"})
+            if author == "product":
+                entry["shipped_sha"] = sha(text)
+                entry.pop("update_available", None)
+            self._mark(entry, text)
+            _write_json(self.meta_path, meta)
+            made = git.commit(reason, author, (f"skills/{name}",)) if git else None
+        return {"name": name, "commit": made, "ts": _now(), "author": author, "reason": reason.strip(),
+                "diff": diff(old, text, name), "changed": True}
+
+    @staticmethod
+    def _mark(entry: dict[str, Any], text: str) -> None:
+        """A built-in is the person's own once its text differs from the shipped one."""
         entry["sha"] = sha(text)
-        if author == "product":
-            entry["shipped_sha"] = sha(text)
-            entry["user_edited"] = False
-            entry.pop("update_available", None)
-        elif entry.get("origin") == "product":
-            entry["user_edited"] = True  # theirs now: a product update never replaces it
+        entry["user_edited"] = entry.get("origin") == "product" and entry.get("shipped_sha") != sha(text)
+
+    def _refresh_meta(self) -> None:
+        """After a revert put files back: make skills.json match what is on disk."""
+        meta = self.meta()
+        for name in list(meta):
+            text = self.read(name)
+            if text is None:
+                del meta[name]
+            else:
+                self._mark(meta[name], text)
+        for p in self.skills_dir.glob("*/SKILL.md") if self.skills_dir.is_dir() else []:
+            if p.parent.name not in meta:
+                meta[p.parent.name] = {"origin": "user"}
+                self._mark(meta[p.parent.name], p.read_text(encoding="utf-8"))
         _write_json(self.meta_path, meta)
-        return {k: checkpoint[k] for k in ("name", "version", "ts", "author", "reason", "diff")} | {"changed": True}
-
-    def history(self, name: str) -> list[dict[str, Any]]:
-        folder = self.history_dir / name
-        out = []
-        for p in sorted(folder.glob("v*.json")) if folder.is_dir() else []:
-            c = _read_json(p, {})
-            out.append({k: c.get(k) for k in ("version", "ts", "author", "reason")} | {"lines_changed": _changed(c.get("diff", ""))})
-        return out
-
-    def checkpoint(self, name: str, version: int) -> dict[str, Any] | None:
-        c = _read_json(self.history_dir / name / f"v{int(version):04d}.json", None)
-        return c if isinstance(c, dict) else None
-
-    def revert(self, name: str, version: int, *, author: str = "user") -> dict[str, Any]:
-        """Put version `version`'s text back, as a new checkpoint (history is never rewritten)."""
-        c = self.checkpoint(name, version)
-        if not c:
-            raise SkillError(f"{name} has no version {version}; skill_history lists them")
-        return self.write(name, c["text"], author=author, reason=f"revert to version {version}", check_rules=False)
 
     def list(self) -> list[dict[str, Any]]:
         meta = self.meta()
@@ -219,41 +309,42 @@ class Store:
             fm = frontmatter(p.read_text(encoding="utf-8"))
             m = meta.get(name, {})
             out.append({"name": name, "description": fm.get("description", ""), "origin": m.get("origin", "user"),
-                        "version": m.get("version", 0), "user_edited": bool(m.get("user_edited")),
+                        "user_edited": bool(m.get("user_edited")),
                         **({"update_available": True} if m.get("update_available") else {})})
         return out
 
     def install_shipped(self, shipped: Path, version: str) -> dict[str, list[str]]:
-        """Copy the integration's built-in skills in. New ones are added; untouched ones follow the
-        product; a copy the user edited is kept and only flagged `update_available`."""
+        """Copy the integration's built-in skills in, as one commit. New ones are added; untouched
+        ones follow the product; a copy the user edited is kept and only flagged `update_available`."""
         done: dict[str, list[str]] = {"added": [], "updated": [], "kept_user_copy": []}
         refs = shipped / "_shared"
-        meta = self.meta()
-        for src in sorted(shipped.glob("*/SKILL.md")):
-            name = src.parent.name
-            text = src.read_text(encoding="utf-8")
-            current = self.read(name)
-            m = meta.get(name, {})
-            if current is None:
-                self.write(name, text, author="product", reason=f"installed with Sunrise {version}")
-                done["added"].append(name)
-            elif current == text:
-                pass
-            elif m.get("user_edited") or m.get("origin") == "user":
-                if m.get("shipped_sha") != sha(text):
-                    meta = self.meta()
-                    meta.setdefault(name, {})["update_available"] = True
-                    _write_json(self.meta_path, meta)
-                done["kept_user_copy"].append(name)
-            else:
-                self.write(name, text, author="product", reason=f"updated with Sunrise {version}")
-                done["updated"].append(name)
-            meta = self.meta()
-        for folder in self.skills_dir.glob("*/") if self.skills_dir.is_dir() else []:
-            (folder / "references").mkdir(exist_ok=True)
-            for ref in REFERENCES:
-                if (refs / ref).is_file():
-                    shutil.copyfile(refs / ref, folder / "references" / ref)
+        with self._lock:
+            git = self._repo()
+            for src in sorted(shipped.glob("*/SKILL.md")):
+                name = src.parent.name
+                text = src.read_text(encoding="utf-8")
+                current = self.read(name)
+                m = self.meta().get(name, {})
+                if current is None:
+                    self.write(name, text, author="product", reason="installed", commit=False)
+                    done["added"].append(name)
+                elif current == text:
+                    pass
+                elif m.get("user_edited") or m.get("origin") == "user":
+                    if m.get("shipped_sha") != sha(text):
+                        meta = self.meta()
+                        meta.setdefault(name, {})["update_available"] = True
+                        _write_json(self.meta_path, meta)
+                    done["kept_user_copy"].append(name)
+                else:
+                    self.write(name, text, author="product", reason="updated", commit=False)
+                    done["updated"].append(name)
+            for folder in self.skills_dir.glob("*/") if self.skills_dir.is_dir() else []:
+                (folder / "references").mkdir(exist_ok=True)
+                for ref in REFERENCES:
+                    if (refs / ref).is_file():
+                        shutil.copyfile(refs / ref, folder / "references" / ref)
+            git.commit(f"Sunrise {version}: built-in skills", "product")
         return done
 
     def reference(self, ref: str) -> str:
@@ -274,17 +365,6 @@ class Store:
                                "(owner.md, house.md, playbooks/router.md)")
         return self.memory_dir / name
 
-    def _memory_history(self, name: str) -> Path:
-        return self.root / "memory_history" / name[:-3].replace("/", "__")
-
-    def _memory_checkpoint(self, name: str, old: str, new: str | None, author: str, reason: str) -> dict[str, Any]:
-        folder = self._memory_history(name)
-        version = len(list(folder.glob("v*.json"))) + 1 if folder.is_dir() else 1
-        c = {"name": name, "version": version, "ts": _now(), "author": author, "reason": reason.strip(),
-             "diff": diff(old, new or "", name), "text": new, "deleted": new is None}
-        _write_json(folder / f"v{version:04d}.json", c)
-        return c
-
     def memory_list(self) -> list[dict[str, Any]]:
         """Every memory file: its name, first line, size and when it last changed."""
         out = []
@@ -302,7 +382,7 @@ class Store:
             return None
 
     def memory_write(self, name: str, text: str, *, author: str = "agent", reason: str) -> dict[str, Any]:
-        """Replace one memory file's whole text. The old text is checkpointed first."""
+        """Replace one memory file's whole text, as one commit."""
         path = self.memory_path(name)
         name = path.relative_to(self.memory_dir).as_posix()
         if author not in ("user", "agent"):
@@ -319,46 +399,120 @@ class Store:
         if secret:
             raise MemoryError_(f"Not saved: this looks like a secret ({secret.group(0)[:24]!r}...). Memory never holds "
                                "passwords, keys or tokens; say where the owner keeps it instead.")
-        old = self.memory_read(name)
-        if old == text:
-            return {"name": name, "changed": False}
-        if old is None and len(self.memory_list()) >= MEMORY_MAX_FILES:
-            raise MemoryError_(f"there are already {MEMORY_MAX_FILES} memory files; merge or delete some first")
-        c = self._memory_checkpoint(name, old or "", text, author, reason)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-        return {k: c[k] for k in ("name", "version", "ts", "author", "reason", "diff")} | {"changed": True}
+        with self._lock:
+            old = self.memory_read(name)
+            if old == text:
+                return {"name": name, "changed": False}
+            if old is None and len(self.memory_list()) >= MEMORY_MAX_FILES:
+                raise MemoryError_(f"there are already {MEMORY_MAX_FILES} memory files; merge or delete some first")
+            git = self._repo()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+            made = git.commit(reason, author, (f"memory/{name}",))
+        return {"name": name, "commit": made, "ts": _now(), "author": author, "reason": reason.strip(),
+                "diff": diff(old or "", text, name), "changed": True}
 
     def memory_delete(self, name: str, *, author: str = "agent", reason: str) -> dict[str, Any]:
         path = self.memory_path(name)
         name = path.relative_to(self.memory_dir).as_posix()
-        old = self.memory_read(name)
-        if old is None:
-            raise MemoryError_(f"no memory file {name!r}; memory_list lists them")
+        if author not in ("user", "agent"):
+            raise MemoryError_("author is user or agent")
         if not (reason or "").strip():
             raise MemoryError_("say why (reason) it's deleted, in one line")
-        c = self._memory_checkpoint(name, old, None, author, reason)
-        path.unlink()
-        return {"name": name, "deleted": True, "version": c["version"],
-                "undo": f"memory_revert name={name} version={c['version'] - 1}" if c["version"] > 1 else None}
+        with self._lock:
+            if self.memory_read(name) is None:
+                raise MemoryError_(f"no memory file {name!r}; memory_list lists them")
+            git = self._repo()
+            path.unlink()
+            made = git.commit(reason, author, (f"memory/{name}",))
+        return {"name": name, "deleted": True, "commit": made, "undo": f"behavior_revert commit={made}"}
 
-    def memory_history(self, name: str) -> list[dict[str, Any]]:
-        self.memory_path(name)
-        folder = self._memory_history(name.strip().lstrip("/"))
-        out = []
-        for p in sorted(folder.glob("v*.json")) if folder.is_dir() else []:
-            c = _read_json(p, {})
-            out.append({k: c.get(k) for k in ("version", "ts", "author", "reason", "deleted")} | {"lines_changed": _changed(c.get("diff", ""))})
-        return out
+    # --- the history of both: git ------------------------------------------------------------
 
-    def memory_revert(self, name: str, version: int, *, author: str = "agent") -> dict[str, Any]:
-        """Put an earlier version's text back, as a new checkpoint."""
-        self.memory_path(name)
-        name = name.strip().lstrip("/")
-        c = _read_json(self._memory_history(name) / f"v{int(version):04d}.json", None)
-        if not isinstance(c, dict) or c.get("text") is None:
-            raise MemoryError_(f"{name} has no version {version} with text; memory_history lists them")
-        return self.memory_write(name, c["text"], author=author, reason=f"revert to version {version}")
+    def behavior_path(self, file: str | None) -> str | None:
+        """A tool's `file` as a path inside the repository: memory/house.md, skills/<name>, a bare
+        memory file name (house.md) or a bare skill name."""
+        file = (file or "").strip().strip("/")
+        if not file:
+            return None
+        if file.startswith("memory/"):
+            return "memory/" + self.memory_path(file[7:]).relative_to(self.memory_dir).as_posix()
+        if file.startswith("skills/"):
+            file = file[7:].split("/")[0]
+        if file.endswith(".md"):
+            return "memory/" + self.memory_path(file).relative_to(self.memory_dir).as_posix()
+        if not NAME_RX.match(file):
+            raise BehaviorError(f"{file!r} isn't a memory file (house.md) or a skill name")
+        return f"skills/{file}"
+
+    def behavior_log(self, file: str | None = None, limit: int = 20, commit: str | None = None, with_diff: bool = False) -> list[dict[str, Any]]:
+        """The latest commits, newest first: id, who, when, why and the files each touched. One file
+        or skill narrows it; `commit` shows just that one; `with_diff` adds each commit's diff."""
+        with self._lock:
+            git, path = self._repo(), self.behavior_path(file)
+            if commit is not None and not COMMIT_RX.match(commit):
+                raise BehaviorError(f"{commit!r} isn't a commit id; behavior_log lists them")
+            args = ["log", "--format=%x1e%h%x1f%an%x1f%aI%x1f%s", "--name-status", "-n", "1" if commit else str(max(1, min(int(limit), 100)))]
+            out = git.run(*args, commit, check=False) if commit else git.run(*args, "--", *([path] if path else TRACKED), check=False)
+            rows = []
+            for block in out.split("\x1e")[1:]:
+                head, _, files = block.partition("\n")
+                cid, author, when, reason = head.split("\x1f", 3)
+                row = {"commit": cid, "author": author, "when": when, "reason": reason,
+                       "files": [f"{line.split(maxsplit=1)[0][0]} {line.split(maxsplit=1)[1]}" for line in files.splitlines() if line.strip()]}
+                if with_diff or commit:
+                    text = git.run("show", "--format=", cid, "--", *([path] if path else TRACKED), check=False)
+                    row["diff"] = text if len(text) <= DIFF_MAX else text[:DIFF_MAX] + "\n... (cut; ask for one file)"
+                rows.append(row)
+        return rows
+
+    def behavior_revert(self, commit: str, file: str | None = None, *, author: str = "agent", reason: str = "") -> dict[str, Any]:
+        """Undo with a new commit, never by rewriting history. Without `file`: reverse exactly what
+        `commit` changed. With `file`: put that one file or skill back the way it was at `commit`."""
+        if not COMMIT_RX.match(commit or ""):
+            raise BehaviorError(f"{commit!r} isn't a commit id; behavior_log lists them")
+        if author not in ("user", "agent"):
+            raise BehaviorError("author is user or agent")
+        who = f"--author={author} <{author}@sunrise.invalid>"
+        with self._lock:
+            git, path = self._repo(), self.behavior_path(file)
+            if not git.run("rev-parse", "-q", "--verify", f"{commit}^{{commit}}", check=False).strip():
+                raise BehaviorError(f"no commit {commit}; behavior_log lists them")
+            subject = git.run("log", "-1", "--format=%s", commit).strip()
+            if path is None:
+                git.run("revert", "--no-commit", commit, check=False)
+                if git.run("diff", "--name-only", "--diff-filter=U").strip():
+                    git.run("revert", "--abort", check=False)
+                    git.run("reset", "-q", "--hard", "HEAD")
+                    raise BehaviorError(f"Later changes build on commit {commit}, so it can't be reversed cleanly. "
+                                        "Put one file back instead: behavior_revert commit=<an earlier commit> file=<the file>.")
+                if not git.run("diff", "--cached", "--name-only").strip():
+                    git.run("revert", "--quit", check=False)
+                    return {"commit": None, "changed": False, "note": "nothing to put back: it's already undone"}
+                message = " ".join(reason.split())[:200] or f'undo "{subject}" ({commit})'
+                git.run("commit", "-q", "-m", message, who)
+            else:
+                if not git.run("ls-tree", "-r", "--name-only", commit, "--", path).strip():
+                    raise BehaviorError(f"{file} didn't exist at commit {commit}. To bring back a deleted file, use the commit before the delete.")
+                git.run("rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", path)
+                target = self.root / path
+                if target.is_dir():
+                    shutil.rmtree(target)
+                elif target.exists():
+                    target.unlink()
+                git.run("checkout", commit, "--", path)
+                if not git.run("diff", "--cached", "--name-only").strip():
+                    return {"commit": None, "changed": False, "note": f"{file} already matches commit {commit}"}
+                message = " ".join(reason.split())[:200] or f"put {path} back to {commit}"
+                git.run("commit", "-q", "-m", message, who)
+            made = git.run("rev-parse", "--short", "HEAD").strip()
+            files = [" ".join(line.split()) for line in git.run("show", "--format=", "--name-status", made).splitlines() if line.strip()]
+            self._refresh_meta()
+        return {"commit": made, "changed": True, "reason": message, "files": files, "undo": f"behavior_revert commit={made}"}
+
+    def last_commit(self) -> dict[str, Any] | None:
+        with self._lock:
+            return self.git.head() if (self.root / ".git").is_dir() else None
 
     # --- small JSON records -----------------------------------------------------------------
 
@@ -392,10 +546,6 @@ class Store:
         tmp = self.root / f"{key}.jsonl.tmp"
         tmp.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
         tmp.replace(self.root / f"{key}.jsonl")
-
-
-def _changed(d: str) -> int:
-    return sum(1 for line in d.splitlines() if line[:1] in "+-" and not line.startswith(("+++", "---")))
 
 
 # --- run logs -----------------------------------------------------------------------------------

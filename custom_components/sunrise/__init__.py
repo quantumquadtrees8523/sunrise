@@ -2,7 +2,8 @@
 
 Setting up the entry copies the built-in skills into <config>/sunrise/skills/ (a person's
 edited copy is never replaced), keeps the agent's memory files in <config>/sunrise/memory/
-(shown as sensor.sunrise_memory) and registers the "Sunrise" LLM API, which Home Assistant's
+(shown as sensor.sunrise_memory), keeps both in a local git repository at <config>/sunrise/ (one
+commit per change, no remote) and registers the "Sunrise" LLM API, which Home Assistant's
 MCP Server serves to any agent at /api/mcp/sunrise. No token, no account, no internet.
 """
 
@@ -15,13 +16,14 @@ from datetime import timedelta
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_STATE_CHANGED
 from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers import llm
 from homeassistant.helpers.event import async_track_time_interval
 
 from .api import SunriseAPI, Runtime
 from .const import DATA_FOLDER, SHIPPED_SKILLS, VERSION
 from .house import USAGE_DOMAINS, UsageTally
-from .store import Store
+from .store import BehaviorError, Store
 
 PLATFORMS = ["sensor"]
 
@@ -30,7 +32,10 @@ type SunriseEntry = ConfigEntry[Runtime]
 
 async def async_setup_entry(hass: HomeAssistant, entry: SunriseEntry) -> bool:
     store = Store(Path(hass.config.path(DATA_FOLDER)))
-    await hass.async_add_executor_job(store.install_shipped, Path(__file__).parent / SHIPPED_SKILLS, VERSION)
+    try:
+        await hass.async_add_executor_job(store.install_shipped, Path(__file__).parent / SHIPPED_SKILLS, VERSION)
+    except BehaviorError as exc:  # no git program on this machine (a hand-made install): say so plainly
+        raise ConfigEntryError(str(exc)) from exc
     rt = Runtime(store=store, options=dict(entry.options))
     entry.runtime_data = rt
     entry.async_on_unload(llm.async_register_api(hass, SunriseAPI(hass, rt)))

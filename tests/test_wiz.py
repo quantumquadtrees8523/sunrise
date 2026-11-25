@@ -155,10 +155,9 @@ async def test_reload_entry_reads_back(hass: HomeAssistant, bulbs) -> None:
 
 async def test_network_check_fios(hass: HomeAssistant, bulbs) -> None:
     await _house(hass, bulbs)
-    await call(hass, "profile_get", {"refresh": True})
     res = await call(hass, "network_check")
     d = res.data
-    assert d["isp"] == "fios" and d["internet"] == "on"
+    assert d["isp_guess"] == "fios" and d["internet"] == "on"
     assert "The internet connection is up." in d["findings"]
     assert d["wifi_devices"]["unreachable"] >= 8
     assert d["wiz_signal"][0]["device"] == "Kitchen Pendant 1"  # weakest first

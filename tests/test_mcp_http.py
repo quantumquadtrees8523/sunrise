@@ -50,6 +50,6 @@ async def test_mcp_server_lists_and_calls_our_tools(hass: HomeAssistant, hass_cl
 
     ha = MCP(str(client.make_url("/")), hass_access_token)
     listed = await hass.async_add_executor_job(ha.tools)
-    assert {t["name"] for t in listed} >= {"backup", "log_run", "skill_revert"}
+    assert {t["name"] for t in listed} >= {"backup", "log_run", "behavior_revert"}
     skills = await hass.async_add_executor_job(ha.call, "list_skills", {})
     assert any(x["name"] == "build-a-skill" for x in skills["skills"])

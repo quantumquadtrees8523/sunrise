@@ -25,7 +25,7 @@ from . import diagnose as D
 from . import house as H
 from .const import DOMAIN, LLM_API_ID, LLM_API_NAME
 from .net import Net
-from .store import CHECKS, MemoryError_, SkillError, Store, sanitize, score
+from .store import CHECKS, BehaviorError, MemoryError_, SkillError, Store, sanitize, score
 
 
 @dataclass
@@ -83,14 +83,6 @@ async def _audit(hass, rt, a, ctx):
     return await H.audit(hass, rt.store)
 
 
-async def _profile_get(hass, rt, a, ctx):
-    return await H.profile_get(hass, rt.store, bool(a.get("refresh")))
-
-
-async def _profile_update(hass, rt, a, ctx):
-    return await H.profile_update(hass, rt.store, dict(a.get("updates") or {}))
-
-
 async def _diagnose(hass, rt, a, ctx):
     return await D.diagnose(hass, rt.store, rt.net, a.get("target"), bool(a.get("power_cycled")))
 
@@ -130,24 +122,6 @@ async def _usage(hass, rt, a, ctx):
     return await H.usage(hass, rt.tally, int(a.get("days") or 14))
 
 
-async def _suggestions(hass, rt, a, ctx):
-    rows = await _job(hass, rt.store.get, "suggestions", []) or []
-    if a.get("op", "list") == "list":
-        return {"suggestions": rows, "rule": "Never pitch an idea that is already here, whatever its status."}
-    idea = (a.get("idea") or "").strip()
-    status = a.get("status")
-    if not idea or status not in ("pitched", "accepted", "declined", "later"):
-        raise HomeAssistantError("record needs idea and status (pitched, accepted, declined or later)")
-    key = " ".join(idea.lower().split())
-    row = next((r for r in rows if r["key"] == key), None)
-    if row is None:
-        row = {"key": key, "idea": idea, "first": time.time()}
-        rows.append(row)
-    row.update(status=status, evidence=a.get("evidence") or row.get("evidence"), updated=time.time())
-    await _job(hass, rt.store.put, "suggestions", rows)
-    return {"ok": True, "recorded": row}
-
-
 async def _list_skills(hass, rt, a, ctx):
     return {"skills": await _job(hass, rt.store.list),
             "note": "get_skill reads one. Built-ins the person edited are theirs (user_edited); update_available means a newer shipped text exists."}
@@ -168,26 +142,18 @@ async def _skill_update(hass, rt, a, ctx):
     if author == "product":
         raise HomeAssistantError("author is user or agent")
     try:
-        return await _job(hass, rt.store.write, a["name"], a["text"], author=author, reason=a.get("reason", ""))
-    except SkillError as exc:
+        out = await _job(hass, rt.store.write, a["name"], a["text"], author=author, reason=a.get("reason", ""))
+    except (SkillError, BehaviorError) as exc:
         return {"ok": False, "error": str(exc)}
-
-
-async def _skill_history(hass, rt, a, ctx):
-    return {"name": a["name"], "versions": await _job(hass, rt.store.history, a["name"])}
-
-
-async def _skill_revert(hass, rt, a, ctx):
-    try:
-        return await _job(hass, rt.store.revert, a["name"], int(a["version"]), author=a.get("author") or "agent")
-    except SkillError as exc:
-        return {"ok": False, "error": str(exc)}
+    if rt.memory_changed:
+        rt.memory_changed()
+    return out
 
 
 async def _memory(hass: HomeAssistant, rt: Runtime, fn, *args, **kw) -> dict[str, Any]:
     try:
         out = await _job(hass, fn, *args, **kw)
-    except MemoryError_ as exc:
+    except (MemoryError_, SkillError, BehaviorError) as exc:
         return {"ok": False, "error": str(exc)}
     if rt.memory_changed:
         rt.memory_changed()
@@ -218,15 +184,18 @@ async def _memory_delete(hass, rt, a, ctx):
     return await _memory(hass, rt, rt.store.memory_delete, a["name"], author=a.get("author") or "agent", reason=a.get("reason", ""))
 
 
-async def _memory_history(hass, rt, a, ctx):
+async def _behavior_log(hass, rt, a, ctx):
     try:
-        return {"name": a["name"], "versions": await _job(hass, rt.store.memory_history, a["name"])}
-    except MemoryError_ as exc:
+        commits = await _job(hass, rt.store.behavior_log, a.get("file"), int(a.get("limit") or 20), a.get("commit"), bool(a.get("diff")))
+    except (MemoryError_, SkillError, BehaviorError) as exc:
         return {"ok": False, "error": str(exc)}
+    return {"commits": commits, "folder": str(rt.store.root),
+            "note": "Newest first. behavior_revert commit=<id> reverses one; add file=<name> to put just that file back as it was then."}
 
 
-async def _memory_revert(hass, rt, a, ctx):
-    return await _memory(hass, rt, rt.store.memory_revert, a["name"], int(a["version"]), author=a.get("author") or "agent")
+async def _behavior_revert(hass, rt, a, ctx):
+    return await _memory(hass, rt, rt.store.behavior_revert, a["commit"], a.get("file"), author=a.get("author") or "agent",
+                         reason=a.get("reason") or "")
 
 
 async def _log_run(hass, rt, a, ctx):
@@ -281,6 +250,7 @@ def _r(key: str, desc: str):
 
 SPECS: list[Spec] = [
     Spec("house_map", "House map", "Rooms -> devices -> things with their state and real entity ids, compact; things with no room last. "
+         "Without a room it also gives `setup`: how Home Assistant is installed, its version and how the house is reached. "
          "Use it to find the real thing before acting.", {_o("room", "only this room"): str,
                                                           _o("everything", "include hidden, config and diagnostic things"): bool}, READ, _house_map),
     Spec("act", "Do something and check it", "Perform one Home Assistant action (e.g. light.turn_on) on things, then read each back: "
@@ -292,12 +262,6 @@ SPECS: list[Spec] = [
     Spec("audit", "Audit the house", "What's dead, not in a room, duplicated, badly named or leftover, Home Assistant's noisy "
          "integrations, and what changed since the last audit. Changes nothing in the house (keeps a private snapshot to compare next time).",
          {}, READ, _audit),
-    Spec("profile_get", "Read the setup profile", "The house's technical profile: install type, HA version, access, counts, "
-         "internet provider and router, remote access. Read it first in every skill. refresh=true detects again.",
-         {_o("refresh", "detect again now"): bool}, READ, _profile_get),
-    Spec("profile_update", "Update the setup profile", "Add what only the agent or person knows: access (how you reach the house), "
-         "isp (fios, spectrum, other), router, remote_access, notes, quirks. Merges; never asks for passwords.",
-         {_r("updates", "fields to set"): dict}, WRITE_IDEMPOTENT, _profile_update, writes=True),
     Spec("diagnose_device", "Why is it unreachable?", "Why devices dropped: HA's record, the address HA uses, whether it answers on the "
          "home network, and for WiZ bulbs a search of the network by MAC. Each device gets a cause: moved (fix in software), answering / "
          "not_loaded (reload), off_network (power-cycle at the switch), forgot_wifi (re-pair in the WiZ app), weak_signal. "
@@ -335,40 +299,38 @@ SPECS: list[Spec] = [
     Spec("usage", "How the house is used", "For each light, switch, fan, speaker and thermostat over the last days: changes, the hours it "
          "goes on, the days used, and whether a person or an automation did it.",
          {_o("days", "1-30, default 14"): int}, READ, _usage),
-    Spec("suggestions", "Ideas already pitched", "op=list: every improvement idea already pitched and what the person said. "
-         "op=record: save one (idea, status pitched/accepted/declined/later, evidence), so it's never pitched again.",
-         {_o("op", "list or record"): str, _o("idea", "the idea in one line"): str, _o("status", "pitched, accepted, declined, later"): str,
-          _o("evidence", "the numbers behind it"): str}, WRITE_IDEMPOTENT, _suggestions, writes=True),
     Spec("list_skills", "List skills", "Every skill in this house (built-in copies and the person's own) with its description, "
          "version and whether the person edited it.", {}, READ, _list_skills),
     Spec("get_skill", "Read a skill", "A skill's full SKILL.md; include_references=true adds the rubric and house basics.",
          {_r("name", "the skill's name"): str, _o("include_references", "also return RUBRIC.md and HOUSE-BASICS.md"): bool}, READ, _get_skill),
-    Spec("skill_update", "Change or add a skill", "Write a skill's SKILL.md (new or changed). The old text is checkpointed first; "
-         "the text must keep its frontmatter and the rubric reference, and an edit that weakens a safety rule is refused.",
+    Spec("skill_update", "Change or add a skill", "Write a skill's SKILL.md (new or changed), as one commit in the behavior history. "
+         "The text must keep its frontmatter and the rubric reference, and an edit that weakens a safety rule is refused.",
          {_r("name", "lowercase-with-hyphens"): str, _r("text", "the whole SKILL.md"): str, _r("reason", "why, in one line"): str,
           _o("author", "user (the person asked) or agent"): str}, CHANGES, _skill_update, writes=True),
-    Spec("skill_history", "A skill's versions", "Every checkpoint of a skill: version, time, author, reason, lines changed.",
-         {_r("name", "the skill"): str}, READ, _skill_history),
-    Spec("skill_revert", "Revert a skill", "Put an earlier version of a skill back (saved as a new version; history is kept).",
-         {_r("name", "the skill"): str, _r("version", "from skill_history"): int, _o("author", "user or agent"): str},
-         CHANGES_IDEMPOTENT, _skill_revert, writes=True),
     Spec("memory_list", "List memory", "Every memory file (Markdown under the house's sunrise/memory folder, which the owner can "
          "open): name, first line, size, when it changed. Read the relevant ones before you start.", {}, READ, _memory_list),
     Spec("memory_read", "Read a memory file", "One memory file's full text. Read the ones that bear on the request before acting.", {_r("name", "e.g. house.md or playbooks/router.md"): str},
          READ, _memory_read),
     Spec("memory_write", "Write a memory file", "Create or replace one memory file (the whole text). Use it for what you learned "
          "that will matter next time: the owner's preferences (owner.md), the house's facts (house.md), how a device or system works "
-         "(playbooks/<thing>.md), dated runs (log.md). Date each fact. The old text is checkpointed. Secrets are refused.",
+         "(playbooks/<thing>.md), ideas pitched and what they said (suggestions.md), dated runs (log.md). Date each fact. "
+         "Each write is one commit in the behavior history. Secrets are refused.",
          {_r("name", "lowercase .md, at most two folders deep"): str, _r("text", "the whole file, Markdown"): str,
           _r("reason", "why, in one line"): str, _o("author", "user (the person asked) or agent"): str}, CHANGES, _memory_write, writes=True),
-    Spec("memory_delete", "Delete a memory file", "Remove one memory file. Its text is checkpointed first, so memory_revert can bring it back.",
+    Spec("memory_delete", "Delete a memory file", "Remove one memory file, as one commit; behavior_revert on that commit brings it back.",
          {_r("name", "the file"): str, _r("reason", "why, in one line"): str, _o("author", "user or agent"): str},
          CHANGES_IDEMPOTENT, _memory_delete, writes=True),
-    Spec("memory_history", "A memory file's versions", "Every checkpoint of a memory file: version, time, author, reason, lines changed.",
-         {_r("name", "the file"): str}, READ, _memory_history),
-    Spec("memory_revert", "Revert a memory file", "Put an earlier version of a memory file back (saved as a new version).",
-         {_r("name", "the file"): str, _r("version", "from memory_history"): int, _o("author", "user or agent"): str},
-         CHANGES_IDEMPOTENT, _memory_revert, writes=True),
+    Spec("behavior_log", "What changed in the agent's behavior", "The history of the skills and memory files (a git repository in the "
+         "house's sunrise folder that the owner can read): each commit's id, who (user, agent or product), when, why and the files it touched, "
+         "newest first. file narrows it to one memory file or skill; commit shows one; diff=true adds what changed. Changes nothing.",
+         {_o("file", "house.md, playbooks/router.md or a skill's name"): str, _o("limit", "how many, default 20"): int,
+          _o("commit", "one commit id, with its diff"): str, _o("diff", "include each commit's diff"): bool}, READ, _behavior_log),
+    Spec("behavior_revert", "Put the agent's behavior back", "Undo a change to a skill or memory file with a new commit (history is never "
+         "rewritten). Without file: reverse exactly what that commit changed (a delete comes back, an edit is unmade). With file: put that "
+         "one memory file or skill back the way it was at that commit.",
+         {_r("commit", "the commit id, from behavior_log"): str, _o("file", "only this memory file or skill"): str,
+          _o("reason", "why, in one line"): str, _o("author", "user (the person asked) or agent"): str},
+         CHANGES_IDEMPOTENT, _behavior_revert, writes=True),
     Spec("log_run", "Log a skill run", "op=record: what you tried, the outcome and the rubric checks R1-R6 (pass/fail); a run under 6 "
          "is what the next edit to that skill learns from. op=list (skill, below=6) reads runs; op=calls (since=unix time) lists this "
          "integration's tool calls; op=export writes a local copy with names and addresses stripped for the person to share by hand.",
@@ -430,15 +392,18 @@ store a password); never lock, unlock, arm or open anything without the person's
 one step; every change undoable; unavailable means unreachable (diagnose, don't retry); suggest, never decide;
 stay on the home network.
 Done means: the real outcome, read back (act says CHECKED); plain words; at most 3 numbered steps for a person;
-never a wrong instruction (read profile_get first); never claim success without read-back; no ids, addresses or
-jargon unless asked. Start with profile_get. Follow a skill (get_skill) when one fits; log_run at the end.
+never a wrong instruction (house_map's setup says how this Home Assistant is installed; house.md says the rest);
+never claim success without read-back; no ids, addresses or jargon unless asked. Follow a skill (get_skill) when
+one fits; log_run at the end.
 Building blocks: the tools are the shared primitives (map, act with read-back, diagnose, routine, checkpoint, undo,
 memory). The skills are repeatable jobs built on them. For a request that needs more than one skill, chain them:
 finish one skill's own verify step before starting the next (add-a-device then routines; device-diagnosis then
 wifi-diagnosis). If memory is empty, offer learn-the-house first.
 Memory: read the memory files that bear on the request first (memory_read). They are dated claims: re-check what
 changes over time. At the end, save what you verified and what the owner told you they prefer (memory_write),
-dated, replacing what turned out wrong. Never store passwords, keys or tokens. The owner can read every file."""
+dated, replacing what turned out wrong. Never store passwords, keys or tokens. The owner can read every file.
+Your behavior is a git repository: every skill or memory change is one commit with your reason. behavior_log shows
+what changed and why; behavior_revert puts it back with a new commit. House changes are separate (changes, undo)."""
 
 
 class SunriseAPI(llm.API):
