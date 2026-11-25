@@ -111,7 +111,7 @@ or, inside Claude Code on version 2.1.275 or later:
 /plugin install sunrise --marketplace quantumquadtrees8523/sunrise
 ```
 
-Then run `/sunrise:fresh-install`. It backs up Home Assistant, installs HACS if it's missing, adds
+Then run `/sunrise:install`. It backs up Home Assistant, installs HACS if it's missing, adds
 Sunrise, connects Claude Code over MCP and checks it on a device you pick. You do three things
 yourself: authorize HACS with GitHub, sign in to Home Assistant, and choose the test device.
 

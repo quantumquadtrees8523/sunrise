@@ -1,9 +1,9 @@
 ---
-name: fresh-install
-description: "Fresh-install the Sunrise HACS integration on a Home Assistant box from Claude Code: back up, install HACS, add Sunrise, connect over MCP, verify on a real device."
+name: install
+description: "Install Sunrise on a Home Assistant box from Claude Code: checkpoint, HACS, the Sunrise integration, connect over MCP, verify on a real device."
 ---
 
-# Sunrise fresh install
+# Sunrise install
 
 Installs Sunrise (`https://github.com/quantumquadtrees8523/sunrise`, a Home Assistant custom integration that serves tools and skills over HA's MCP Server) the way a new user would: through HACS, on a box that has neither. Run it from Claude Code on a machine that can reach the box. Every run doubles as a test of the install experience, so record every snag.
 
@@ -62,7 +62,7 @@ Create a local HA backup (Settings → System → Backups, with only the local l
 **Exit:** the Sunrise entry is loaded with no errors, and `<config>/sunrise/` exists.
 
 ## Phase 4: connect Claude Code
-- Endpoint: `/api/mcp/sunrise` on the box's **HTTPS** address (Claude Code requires HTTPS).
+- Endpoint: `/api/mcp/sunrise` on the box's **HTTPS** address (Claude Code requires HTTPS). Pick the address in this order: a local HTTPS name the owner already uses at home, then their remote address (Home Assistant Cloud, a relay or their own domain). If the box has no HTTPS address at all, stop and say so: that is a setup step for the owner, not something to work around.
   ```
   claude mcp add --transport http sunrise https://<ha-address>/api/mcp/sunrise
   ```
@@ -87,6 +87,9 @@ Report pass or fail for each:
 - **HACS + GitHub:** "In Home Assistant: Settings → Devices & services → Add integration → HACS. Tick the acknowledgements, then open the GitHub link it shows, enter the code, and approve. Tell me when it says success."
 - **MCP sign-in:** "In Claude Code run `/mcp`, pick `sunrise`, choose Authenticate, and sign in to Home Assistant in the browser window."
 - **Token (fallback only):** "Profile → Security → Long-lived access tokens → Create, name it 'Claude', and set it yourself with `export HA_TOKEN=…` in your terminal. Don't paste it to me."
+
+## After a pass
+Say it worked in one line, then offer the first skill: "Say **learn the house** and I'll walk it once and fill in memory." Don't start it unasked.
 
 ## Rollback
 Remove the Sunrise integration entry → remove Sunrise in HACS → restart. Data stays in `<config>/sunrise/` until deleted. If something is badly wrong, restore the Phase 1 backup.
