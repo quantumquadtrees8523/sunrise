@@ -8,8 +8,8 @@ description: Builds a new skill for this house, from a request or from work just
 Read `references/HOUSE-BASICS.md` first. Done means the rubric in `references/RUBRIC.md` passes.
 
 A skill is a short instruction file (`SKILL.md`) the agent follows. It lives in the person's own
-skills folder (`<config>/sunrise/skills/<name>/`), is checkpointed on every change and can be
-reverted. A good one gives the same shape of result every run, done the way this owner likes it.
+skills folder (`<config>/sunrise/skills/<name>/`), is one git commit per change and can be
+put back (`behavior_revert`). A good one gives the same shape of result every run, done the way this owner likes it.
 
 **Stance:** you are the implementation specialist. Make the calls and bring a finished draft.
 Ask only what the source can't answer, at most 4 questions, one at a time.

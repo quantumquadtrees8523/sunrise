@@ -52,23 +52,46 @@ Plain Markdown in `<config>/sunrise/memory/` that the agent writes and you can o
 `owner.md`, `house.md`, `playbooks/<thing>.md`, `log.md`. In Home Assistant it shows as
 `sensor.sunrise_memory` (the number of files, with each file's name, first line and when it changed).
 
-- Every write and delete is checkpointed with who, when and why, and can be reverted.
+- Every write and delete is one git commit with who, when and why, and can be put back.
 - Passwords, keys and tokens are refused. Files stay inside the folder, are `.md` only and are size-capped.
 - The agent sees the list of files at the start of every session and is told to treat them as dated claims.
 
 ### Tools
 
 Served as the **Sunrise** API: `house_map`, `act` (does it, then reads it back: CHECKED / NOT
-CONFIRMED / UNREACHABLE), `audit`, `profile_get`, `profile_update`, `diagnose_device`, `fix_device`,
-`registry_edit`, `routine` (automations: check, save, try, delete), `changes`, `undo`, `backup` (a local checkpoint), `network_check`, `usage`, `suggestions`, `list_skills`,
-`get_skill`, `skill_update`, `skill_history`, `skill_revert`, `memory_list`, `memory_read`,
-`memory_write`, `memory_delete`, `memory_history`, `memory_revert`, `log_run`. Each declares honest
+CONFIRMED / UNREACHABLE), `audit`, `diagnose_device`, `fix_device`, `registry_edit`, `routine`
+(automations: check, save, try, delete), `changes`, `undo`, `backup` (a local checkpoint),
+`network_check`, `usage`, `list_skills`, `get_skill`, `skill_update`, `memory_list`, `memory_read`,
+`memory_write`, `memory_delete`, `behavior_log`, `behavior_revert`, `log_run`. Each declares honest
 read-only / destructive annotations. The API's prompt (the MCP prompt "Sunrise") carries the fixed
 rules, the skills index and the memory index.
 
 Your skills live in `<config>/sunrise/skills/`, outside `custom_components`, so updates never
-overwrite them. Every change to a skill is checkpointed (version, time, who, why, diff) and can be
-reverted. If you or your agent edit a built-in skill, it's yours: a product update never replaces it.
+overwrite them. If you or your agent edit a built-in skill, it's yours: a product update never
+replaces it.
+
+### Your agent's behavior is a git repository you can read
+
+`<config>/sunrise/` is a plain git repository. It tracks two things only: `skills/` and `memory/`.
+Every change the agent makes to either is one commit, with its reason as the message and `agent`,
+`user` or `product` as the author. Edits you make by hand are committed as yours the next time
+Sunrise touches the folder.
+
+```bash
+cd /config/sunrise        # wherever your Home Assistant config lives
+git log --oneline         # what changed, newest first
+git show <commit>         # exactly what one change did
+```
+
+- Ask the agent "what did you change?" and it reads the same history (`behavior_log`); "put it
+  back" makes a new commit that reverses one (`behavior_revert`). History is never rewritten.
+- The repository has no remote. Nothing fetches or pushes; it never leaves the machine.
+- Run data, logs and anything else in the folder are ignored, and memory refuses secrets, so
+  there are no passwords in the history.
+- It covers the agent's behavior, not the house. Renames, room moves and routines go back with
+  `undo`; a checkpoint (a local Home Assistant backup) is the way back when everything is broken.
+- It uses the `git` program that Home Assistant's own images include. On a hand-made install
+  without git, Sunrise says so at setup instead of running without history.
 
 ## Install
 

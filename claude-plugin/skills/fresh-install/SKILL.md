@@ -79,6 +79,7 @@ Report pass or fail for each:
 - [ ] the MCP tool list includes Sunrise's tools (`house_map`, `act`, `routine`, `changes`, `list_skills`, `memory_list`, …)
 - [ ] `list_skills` returns every skill in the repo's `skills/` folder (compare with the README's table), each readable with `get_skill`
 - [ ] `memory_list` answers, and `sensor.sunrise_memory` exists in Home Assistant
+- [ ] `behavior_log` lists the built-in skills' first commit, and `git -C <config>/sunrise log --oneline` on the box shows the same
 - [ ] `act` turns the test device off, then on, each returning CHECKED and confirmed by a direct read
 - [ ] nothing else changed: the other integrations are still loaded
 

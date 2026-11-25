@@ -23,11 +23,11 @@ Ask only what it can't know, at most 5 questions, one at a time, each with a def
 ## Phase 1: read the house
 
 1. `memory_list`: empty means a first run; otherwise read what is there and re-check it.
-2. `profile_get`: how Home Assistant is installed, its version, how the house is reached.
-3. `house_map`: rooms, the devices in each, what each can do, how each connects.
-4. `audit`: what is unreachable, has no room, is duplicated or unclear; noisy integrations.
-5. `network_check`: the router if Home Assistant knows it; hubs and coordinators.
-6. `routine` op=list: what already runs by itself.
+2. `house_map`: its `setup` (how Home Assistant is installed, its version, how the house is
+   reached), then rooms, the devices in each, what each can do, how each connects.
+3. `audit`: what is unreachable, has no room, is duplicated or unclear; noisy integrations.
+4. `network_check`: the router if Home Assistant knows it; hubs and coordinators.
+5. `routine` op=list: what already runs by itself.
 
 Exit: a draft of `house.md` with nothing from the owner yet.
 

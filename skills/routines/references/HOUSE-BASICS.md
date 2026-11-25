@@ -6,10 +6,9 @@ How to operate a Home Assistant house safely. Not a skill by itself: every skill
 
 These skills assume the Sunrise integration's tools, reached through Home Assistant's MCP
 Server (endpoint `/api/mcp/sunrise`). Their names are `house_map`, `act`, `audit`,
-`profile_get`, `profile_update`, `diagnose_device`, `fix_device`, `registry_edit`, `routine`, `changes`, `undo`, `backup`,
-`network_check`, `usage`, `suggestions`, `list_skills`, `get_skill`, `skill_update`, `skill_history`,
-`skill_revert`, `log_run`, `memory_list`, `memory_read`, `memory_write`, `memory_delete`, `memory_history`,
-`memory_revert`. When several of Home Assistant's APIs are combined, the same tools appear
+`diagnose_device`, `fix_device`, `registry_edit`, `routine`, `changes`, `undo`, `backup`, `network_check`, `usage`,
+`list_skills`, `get_skill`, `skill_update`, `memory_list`, `memory_read`, `memory_write`, `memory_delete`,
+`behavior_log`, `behavior_revert`, `log_run`. When several of Home Assistant's APIs are combined, the same tools appear
 with a prefix, such as `sunrise__house_map`.
 
 No integration? Use what you have (HA's own MCP tools, ha-mcp, the REST API) and keep every rule
@@ -17,9 +16,9 @@ below. Where a step needs a tool you don't have, say so plainly instead of guess
 
 ## Start every run the same way
 
-1. `profile_get`. It says the install type, the HA version, what you can reach and the router. If
-   it's missing or older than a week, learn it with `network_check` and `house_map` and save it with `profile_update`.
-2. Use the profile so you never give a wrong instruction (no HAOS add-on steps on a Container
+1. `house_map`. Its `setup` says the install type, the HA version and how the house is reached,
+   detected fresh. `house.md` in memory holds what only people know: the provider, the router, quirks.
+2. Use both so you never give a wrong instruction (no HAOS add-on steps on a Container
    install, no router web page steps on a router that has none).
 
 ## Memory
@@ -30,12 +29,22 @@ Assistant as `sensor.sunrise_memory`):
 - `owner.md`: how this person wants things done and reported.
 - `house.md`: facts about this house, the test device, what is off on purpose.
 - `playbooks/<thing>.md`: how one router, brand or system works here (pages, quirks, what its numbers mean).
+- `suggestions.md`: every idea already pitched and what the person said, so it isn't pitched twice.
 - `log.md`: dated runs, newest first.
 
 Read the files that bear on the request before you start (`memory_list`, `memory_read`). They are
 dated claims: re-check anything that changes over time. At the end, save what you verified and
 what the person told you they prefer (`memory_write`, the whole file, with a date on each fact),
 replacing what turned out wrong. Never save a password, key or token: say where the person keeps it.
+
+## Your behavior is kept in git
+
+The skills and the memory files are a git repository in `<config>/sunrise/`. Every `skill_update`,
+`memory_write` and `memory_delete` is one commit with your reason, so give a reason a person would
+understand. `behavior_log` shows what changed, who did it and why; `behavior_revert` puts a commit
+or one file back with a new commit. History is never rewritten. This covers your behavior only:
+changes to the house itself are in `changes` and go back with `undo`, and a checkpoint (`backup`)
+is the way back when the whole house is broken.
 
 ## The router
 

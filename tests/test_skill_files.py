@@ -83,3 +83,20 @@ def test_shipped_copies_are_in_sync() -> None:
 
 def test_house_basics_says_what_needs_the_internet() -> None:
     assert "Internet" in (ROOT / "skills" / "_shared" / "HOUSE-BASICS.md").read_text(encoding="utf-8")
+
+
+def test_every_tool_a_skill_names_exists() -> None:
+    """The shared basics list exactly the tools the integration serves, and no skill, README or
+    plugin text names a tool that was removed."""
+    from custom_components.sunrise.api import SPECS
+
+    tools = {s.name for s in SPECS}
+    basics = (ROOT / "skills" / "_shared" / "HOUSE-BASICS.md").read_text(encoding="utf-8")
+    listed = basics.split("Their names are", 1)[1].split("When several", 1)[0]
+    assert set(re.findall(r"`([a-z_]+)`", listed)) == tools
+    gone = {"profile_get", "profile_update", "skill_history", "skill_revert", "memory_history", "memory_revert"}
+    texts = [*ROOT.glob("skills/**/*.md"), ROOT / "README.md", *ROOT.glob("claude-plugin/**/*.md")]
+    for path in texts:
+        text = path.read_text(encoding="utf-8")
+        assert not {g for g in gone if g in text}, path
+        assert "`suggestions`" not in text, path

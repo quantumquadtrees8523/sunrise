@@ -27,7 +27,7 @@ ideas, not questions. You suggest; the owner decides.
 ## Memory
 
 Start: `memory_read` `owner.md` (preferences, dislikes, budget, who lives here), `house.md`,
-`log.md`; and `suggestions` op=list for every idea already pitched. End: update them (phase 6).
+`log.md`, and `suggestions.md`: every idea already pitched and what they said. End: update them (phase 6).
 
 ## Phase 1: take stock
 
@@ -55,7 +55,7 @@ Exit: a list of candidate ideas, each with its evidence.
 
 ## Phase 3: rank and propose
 
-Drop anything in `suggestions`, anything `owner.md` rules out, and anything without evidence.
+Drop anything in `suggestions.md`, anything `owner.md` rules out, and anything without evidence.
 Rank by benefit to the household over effort; fragile and untidy items that block others go first.
 Present at most 5, each in this shape:
 
@@ -65,7 +65,7 @@ Present at most 5, each in this shape:
 - **Risk:** what could annoy or go wrong, and how it is undone.
 - **Can I do it now?** yes / yes after you buy X / steps for you.
 
-Record each with `suggestions` op=record (idea, status pitched, evidence) as you pitch it. Then ask which to do.
+Then ask which to do.
 
 ## Phase 4: build what they picked (no purchase needed)
 
@@ -87,7 +87,8 @@ and what it unlocks. Offer to set it up when it arrives. No brands unless they a
 
 ## Phase 6: save what was learned
 
-- `suggestions` op=record again for each idea with its new status: accepted, declined or later.
+- `suggestions.md`: one line per idea pitched today: the date, the idea, its evidence, and what they
+  said (accepted, declined or later). Keep the old lines; an idea is never pitched twice.
 - `owner.md`: preferences you learned ("no lights changing on their own in the bedroom").
 - `house.md`: what was built, with the date and how to undo it; gaps still open.
 - `log.md`: date, what was pitched, what was built, test results.
