@@ -394,6 +394,15 @@ async def _record(hass: HomeAssistant, store: Store, **row: Any) -> dict[str, An
     return await hass.async_add_executor_job(store.append, "changes", row)
 
 
+async def changes(hass: HomeAssistant, store: Store, limit: int = 20) -> dict[str, Any]:
+    """The latest changes Sunrise made to the house, newest first, each with whether it's been undone."""
+    rows = await hass.async_add_executor_job(store.rows, "changes")
+    out = [{"change_id": r.get("id"), "when": r.get("ts"), "what": r.get("op"), "target": r.get("target"),
+            "before": r.get("before") if not isinstance(r.get("before"), dict) else r["before"].get("alias") or r["before"].get("entity_id"),
+            "undone": bool(r.get("undone"))} for r in rows[-max(1, min(limit, 100)):]]
+    return {"changes": out[::-1], "count": len(rows), "note": "undo takes a change_id; skills and memory have their own history tools"}
+
+
 async def undo(hass: HomeAssistant, store: Store, change_id: str) -> dict[str, Any]:
     rows = await hass.async_add_executor_job(store.rows, "changes")
     row = next((r for r in rows if r.get("id") == change_id), None)
@@ -427,6 +436,10 @@ async def undo(hass: HomeAssistant, store: Store, change_id: str) -> dict[str, A
             raise HomeAssistantError("that device's integration entry is gone; nothing to undo")
         hass.config_entries.async_update_entry(entry, data={**entry.data, "host": before})
         await hass.config_entries.async_reload(entry.entry_id)
+    elif op in ("routine_save", "routine_delete"):
+        from .routines import undo_routine  # noqa: PLC0415
+
+        await undo_routine(hass, row)
     else:
         raise HomeAssistantError(f"can't undo {op}")
     row["undone"] = time.time()

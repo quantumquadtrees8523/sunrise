@@ -194,6 +194,87 @@ async def test_backup_create_confirms_it_is_listed(hass: HomeAssistant, house) -
     assert res.data["confirmed"] is False and "Don't make changes" in res.data["error"]
 
 
+async def test_a_checkpoint_never_goes_to_a_cloud_location(hass: HomeAssistant, house) -> None:
+    """Checkpoints are local only: with cloud locations set up beside the local one, only the local one is used;
+    with no local one, nothing is made."""
+    class Manager:
+        local_backup_agents = {"backup.local": object()}
+        backup_agents = {"cloud.cloud": object(), "backup.local": object(), "remote_drive.main": object()}
+        asked: list = []
+
+        async def async_get_backups(self):
+            return {}, {}
+
+        async def async_create_backup(self, **kw):
+            self.asked.append(kw["agent_ids"])
+
+    from homeassistant.components.backup.const import DATA_MANAGER
+
+    hass.config.components.add("backup")
+    hass.data[DATA_MANAGER] = m = Manager()
+    await call(hass, "backup", {"op": "create"})
+    assert m.asked == [["backup.local"]]
+    m.local_backup_agents = {}
+    res = await call(hass, "backup", {"op": "create"})
+    assert res.data["confirmed"] is False and "no local" in res.data["error"] and len(m.asked) == 1
+
+
+async def test_routines_are_checked_saved_tried_listed_and_undone(hass: HomeAssistant, house) -> None:
+    from pathlib import Path
+
+    from homeassistant.setup import async_setup_component
+
+    Path(hass.config.path("configuration.yaml")).write_text("automation: !include automations.yaml\n", encoding="utf-8")
+    Path(hass.config.path("automations.yaml")).write_text("[]\n", encoding="utf-8")
+    assert await async_setup_component(hass, "automation", {"automation": []})
+    calls = async_mock_service(hass, "light", "turn_off")
+    lamp = "light.living_room_lamp"
+    config = {"alias": "Lamp off at night", "triggers": [{"trigger": "time", "at": "23:15:00"}],
+              "actions": [{"action": "light.turn_off", "target": {"entity_id": lamp}}]}
+
+    bad = await call(hass, "routine", {"op": "check", "config": {"alias": "x", "triggers": [{"trigger": "nonsense"}], "actions": []}})
+    assert bad.data["valid"] is False and bad.data["saved"] is False
+    ghost = {**config, "actions": [{"action": "light.turn_off", "target": {"entity_id": "light.no_such_lamp"}}]}
+    res = await call(hass, "routine", {"op": "save", "config": ghost})
+    assert res.data["saved"] is False and res.data["missing"][0]["id"] == "light.no_such_lamp"
+    dry = await call(hass, "routine", {"op": "check", "config": config})
+    assert dry.data == {"ok": True, "valid": True, "saved": False, "missing": [], "guarded": [], "makes_sound": False}
+
+    saved = await call(hass, "routine", {"op": "save", "config": config})
+    rid, eid = saved.data["id"], saved.data["entity_id"]
+    assert saved.data["ok"] and saved.data["on"] and hass.states.get(eid).name == "Lamp off at night"
+    listed = await call(hass, "routine", {"op": "list"})
+    assert any(r["id"] == rid and r["editable"] for r in listed.data["routines"])
+    tried = await call(hass, "routine", {"op": "try", "id": rid})
+    assert tried.data["ran"] and calls and calls[-1].data["entity_id"] == [lamp]
+
+    log = await call(hass, "changes")
+    assert log.data["changes"][0]["what"] == "routine_save" and log.data["changes"][0]["undone"] is False
+    undone = await call(hass, "undo", {"change_id": saved.data["change_id"]})
+    assert undone.data["ok"] and hass.states.get(eid) is None
+    assert (await call(hass, "changes")).data["changes"][0]["undone"] is True
+
+
+async def test_a_routine_that_moves_a_lock_or_makes_sound_needs_a_yes(hass: HomeAssistant, house) -> None:
+    from pathlib import Path
+
+    from homeassistant.setup import async_setup_component
+
+    Path(hass.config.path("configuration.yaml")).write_text("automation: !include automations.yaml\n", encoding="utf-8")
+    Path(hass.config.path("automations.yaml")).write_text("[]\n", encoding="utf-8")
+    assert await async_setup_component(hass, "automation", {"automation": []})
+    hass.states.async_set("lock.front_door", "locked")
+    config = {"alias": "Unlock at 7", "triggers": [{"trigger": "time", "at": "07:00:00"}],
+              "actions": [{"action": "lock.unlock", "target": {"entity_id": "lock.front_door"}}]}
+    res = await call(hass, "routine", {"op": "save", "config": config})
+    assert res.data["saved"] is False and res.data["guarded"] == ["lock.front_door"]
+    yes = await call(hass, "routine", {"op": "save", "config": config, "confirmed": True})
+    assert yes.data["saved"] is True
+    assert (await call(hass, "routine", {"op": "try", "id": yes.data["id"]})).data["ran"] is False
+    gone = await call(hass, "routine", {"op": "delete", "id": yes.data["id"]})
+    assert gone.data["ok"] and hass.states.get(yes.data["entity_id"]) is None
+
+
 async def test_backup_without_backup_integration_says_dont_change(hass: HomeAssistant, house) -> None:
     assert "backup" not in hass.config.components
     res = await call(hass, "backup", {"op": "create"})

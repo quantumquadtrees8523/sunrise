@@ -108,6 +108,16 @@ async def _undo(hass, rt, a, ctx):
     return await H.undo(hass, rt.store, a["change_id"])
 
 
+async def _changes(hass, rt, a, ctx):
+    return await H.changes(hass, rt.store, int(a.get("limit") or 20))
+
+
+async def _routine(hass, rt, a, ctx):
+    from . import routines  # noqa: PLC0415
+
+    return await routines.routine(hass, rt.store, a)
+
+
 async def _backup(hass, rt, a, ctx):
     return await H.backup(hass, a.get("op", "list"))
 
@@ -303,10 +313,21 @@ SPECS: list[Spec] = [
          "op=create_area (value=room name), op=remove_entity (only a leftover whose setup was deleted). Returns change_id for undo.",
          {_r("op", "rename, set_area, create_area or remove_entity"): str, _o("target", "entity id or device id"): str,
           _o("value", "the new name or the room"): str}, CHANGES, _registry_edit, writes=True),
-    Spec("undo", "Undo a change", "Put back one change made by registry_edit or fix_device, by its change_id.",
+    Spec("changes", "What Sunrise changed", "The latest changes made to the house through these tools, newest first: what, which "
+         "thing, when, and whether it was undone. Each has a change_id for undo. Changes nothing.",
+         {_o("limit", "how many, default 20"): int}, READ, _changes),
+    Spec("routine", "Routines (automations)", "Home Assistant automations by asking. op=list: every routine and when it last ran. "
+         "op=get: one routine's config. op=check: validate a config and report what it touches, saving nothing (the dry run). "
+         "op=save: validate, save and load it (new, or replacing id); returns change_id for undo. op=try: run it once now, "
+         "skipping its conditions. op=delete: remove it (undoable). Locks, alarms, garage doors, heating and sound need confirmed=true.",
+         {_o("op", "list, get, check, save, try or delete"): str, _o("id", "the routine's id (omit to make a new one)"): str,
+          _o("config", "the automation: alias, description, triggers, conditions, actions, mode"): dict,
+          _o("confirmed", "the person said yes to exactly this, in this conversation"): bool}, CHANGES, _routine, writes=True),
+    Spec("undo", "Undo a change", "Put back one change made by registry_edit, fix_device or routine, by its change_id.",
          {_r("change_id", "from the change's result"): str}, CHANGES_IDEMPOTENT, _undo, writes=True),
-    Spec("backup", "Back up Home Assistant", "op=create: Home Assistant's own backup to its local storage, waits up to a minute and "
-         "confirms it's listed. op=list: the latest backups. Make one before any change that isn't undoable in one step.",
+    Spec("backup", "Checkpoint Home Assistant", "A checkpoint to go back to if something breaks: a Home Assistant backup kept on "
+         "this machine only, never sent anywhere. op=create: makes one, waits up to a minute and confirms it's listed. "
+         "op=list: the latest ones. Make one before any change that isn't undoable in one step.",
          {_o("op", "create or list"): str}, WRITE, _backup, writes=True),
     Spec("network_check", "Check the home network", "The network from the house's side: router sensors (e.g. Fios WAN status and "
          "speed), whether the router answers, how many Wi-Fi devices are unreachable, the WiZ bulbs' signal, error counts. Changes nothing.",
@@ -405,12 +426,16 @@ async def _may_write(hass: HomeAssistant, ctx: llm.LLMContext) -> bool:
 RULES = """You look after this Home Assistant home with the Sunrise tools.
 Fixed rules: never change router settings, Wi-Fi or passwords on your own (give steps; only a skill that says so
 may read or change the router, after the person signs in themselves and says yes to each change; never type or
-store a password); never lock, unlock, arm or open anything without the person's yes; back up (backup op=create, confirmed) before a change that isn't undoable in
+store a password); never lock, unlock, arm or open anything without the person's yes; take a checkpoint (backup op=create, confirmed; it stays on this machine) before a change that isn't undoable in
 one step; every change undoable; unavailable means unreachable (diagnose, don't retry); suggest, never decide;
 stay on the home network.
 Done means: the real outcome, read back (act says CHECKED); plain words; at most 3 numbered steps for a person;
 never a wrong instruction (read profile_get first); never claim success without read-back; no ids, addresses or
 jargon unless asked. Start with profile_get. Follow a skill (get_skill) when one fits; log_run at the end.
+Building blocks: the tools are the shared primitives (map, act with read-back, diagnose, routine, checkpoint, undo,
+memory). The skills are repeatable jobs built on them. For a request that needs more than one skill, chain them:
+finish one skill's own verify step before starting the next (add-a-device then routines; device-diagnosis then
+wifi-diagnosis). If memory is empty, offer learn-the-house first.
 Memory: read the memory files that bear on the request first (memory_read). They are dated claims: re-check what
 changes over time. At the end, save what you verified and what the owner told you they prefer (memory_write),
 dated, replacing what turned out wrong. Never store passwords, keys or tokens. The owner can read every file."""

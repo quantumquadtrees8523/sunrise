@@ -15,7 +15,7 @@ from custom_components.sunrise.const import DOMAIN, LLM_API_ID, LLM_API_NAME
 from .conftest import call, setup_integration
 
 EXPECTED_TOOLS = {"house_map", "act", "audit", "profile_get", "profile_update", "diagnose_device", "fix_device", "registry_edit",
-                  "undo", "backup", "network_check", "usage", "suggestions", "list_skills", "get_skill", "skill_update",
+                  "undo", "changes", "routine", "backup", "network_check", "usage", "suggestions", "list_skills", "get_skill", "skill_update",
                   "skill_history", "skill_revert", "log_run", "memory_list", "memory_read", "memory_write", "memory_delete",
                   "memory_history", "memory_revert"}
 
@@ -75,7 +75,7 @@ async def test_built_in_skills_installed_outside_custom_components(hass: HomeAss
     await setup_integration(hass)
     res = await call(hass, "list_skills")
     names = {s["name"] for s in res.data["skills"]}
-    assert names == {"build-a-skill", "device-diagnosis", "improve-home", "wifi-diagnosis"}
+    assert names == {"add-a-device", "build-a-skill", "device-diagnosis", "improve-home", "learn-the-house", "routines", "undo", "wifi-diagnosis"}
     folder = hass.config.path("sunrise", "skills", "build-a-skill")
     assert "custom_components" not in folder
     got = await call(hass, "get_skill", {"name": "build-a-skill", "include_references": True})

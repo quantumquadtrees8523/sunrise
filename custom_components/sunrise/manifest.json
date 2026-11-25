@@ -1,7 +1,7 @@
 {
   "domain": "sunrise",
   "name": "Sunrise",
-  "after_dependencies": ["backup", "recorder", "network", "system_log", "mcp_server", "wiz", "llm"],
+  "after_dependencies": ["automation", "backup", "recorder", "network", "system_log", "mcp_server", "wiz", "llm"],
   "codeowners": [],
   "config_flow": true,
   "dependencies": [],
