@@ -42,8 +42,10 @@ one is needed (from `house.md`, else ask once).
 ## Phase 1: read the records
 
 1. `house_map`: the device's state, room, how it connects, its integration.
-2. `diagnose_device` with the device as target: last seen, the integration's state, its address,
-   recent errors in the log, and whether it answers on the network.
+2. `diagnose_device` with the device as target: last seen, the integration's state, its maker,
+   model and how it connects, its address, recent errors in the log, and whether it answers on the
+   network. A `tailor` line means Sunrise has no helper for this kind: the steps you give come
+   from this maker and model's own pages (phase 3), not from a general guess.
 3. `audit`: is it disabled, renamed, duplicated, without a room, or one of many dead things?
 4. `network_check`: is the house's own link and router fine?
 5. Others like it: are devices of the same brand, connection type, room or switch failing too?

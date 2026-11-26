@@ -49,6 +49,27 @@ def test_skills_are_general_and_use_memory_for_the_specifics() -> None:
         assert not re.search(r"\b(WiZ|Verizon|Fios|CR1000|Spectrum|Govee|\d+\.\d+\.\d+\.\d+)\b", text), path.parent.name
 
 
+ONE_HOUSE = re.compile(r"\b(Verizon|Fios|CR1000|Spectrum|Govee|Console Home|console-home|console\.local)\b")
+
+
+def _brand_only_as_a_helper(text: str) -> list[str]:
+    """Sentences naming WiZ that don't say it's a helper Sunrise has (not *the* example of a device)."""
+    sentences = re.split(r"(?<=[.!?])\s+", " ".join(text.split()))
+    return [x for x in sentences if re.search(r"\bWiZ\b", x) and "helper" not in x]
+
+
+def test_plugin_readme_and_tool_text_are_general() -> None:
+    """What every agent and owner reads names no one house's provider, router or box, and names a
+    brand only as a kind of device Sunrise has a helper for."""
+    from custom_components.sunrise.api import RULES, SPECS  # noqa: PLC0415
+
+    texts = {str(p.relative_to(ROOT)): p.read_text(encoding="utf-8") for p in [ROOT / "README.md", *ROOT.glob("claude-plugins/**/*.md")]}
+    texts |= {f"tool {s.name}": f"{s.title}. {s.description}" for s in SPECS} | {"RULES": RULES}
+    for name, text in texts.items():
+        assert not ONE_HOUSE.search(text), (name, ONE_HOUSE.search(text).group(0))
+        assert not _brand_only_as_a_helper(text), (name, _brand_only_as_a_helper(text))
+
+
 def test_the_router_rule_reads_the_same_everywhere() -> None:
     rubric = (ROOT / "skills" / "_shared" / "RUBRIC.md").read_text(encoding="utf-8")
     basics = (ROOT / "skills" / "_shared" / "HOUSE-BASICS.md").read_text(encoding="utf-8")

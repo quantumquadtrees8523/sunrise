@@ -262,15 +262,18 @@ SPECS: list[Spec] = [
     Spec("audit", "Audit the house", "What's dead, not in a room, duplicated, badly named or leftover, Home Assistant's noisy "
          "integrations, and what changed since the last audit. Changes nothing in the house (keeps a private snapshot to compare next time).",
          {}, READ, _audit),
-    Spec("diagnose_device", "Why is it unreachable?", "Why devices dropped: HA's record, the address HA uses, whether it answers on the "
-         "home network, and for WiZ bulbs a search of the network by MAC. Each device gets a cause: moved (fix in software), answering / "
-         "not_loaded (reload), off_network (power-cycle at the switch), forgot_wifi (re-pair in the WiZ app), weak_signal. "
+    Spec("diagnose_device", "Why is it unreachable?", "Why devices dropped, for any integration: HA's record (since when, the "
+         "integration's state, maker, model, how it connects), the address HA uses, whether anything answers there, log errors. "
+         "Where Sunrise has a helper for that kind of device (WiZ today) it also asks the device and searches the network for it. "
+         "Each device gets a cause: moved (fix in software), answering / not_loaded (reload), off_network / unreachable (power-cycle), "
+         "still_unreachable / forgot_wifi (reconnect with the maker's steps), radio_silent (battery, range), weak_signal. "
+         "A device with `tailor` has no helper: look up its maker's own steps for its model. "
          "No target: everything unreachable. power_cycled=true after the person flipped the switches.",
          {_o("target", "a room, a device name, 'the kitchen lights', an entity or device id"): str,
           _o("power_cycled", "the person just turned these off and on"): bool}, READ, _diagnose),
-    Spec("fix_device", "Fix a device in software", "op=reload_entry: reconnect Home Assistant to a device. op=update_host: point HA "
-         "at a WiZ bulb's new address through WiZ's own setup (host optional: found by MAC); keeps the old address for undo. "
-         "Never the router, Wi-Fi or passwords.",
+    Spec("fix_device", "Fix a device in software", "op=reload_entry: reconnect Home Assistant to any device. op=update_host: point HA "
+         "at a device's new address through its integration's own setup, where Sunrise has a helper for that kind of device (WiZ "
+         "today; host optional: found by searching the network); keeps the old address for undo. Never the router, Wi-Fi or passwords.",
          {_r("op", "reload_entry or update_host"): str, _r("target", "device_id from diagnose_device"): str,
           _o("host", "update_host: the new address"): str}, CHANGES, _fix, writes=True),
     Spec("registry_edit", "Rename or move a thing", "One undoable registry change: op=rename (value=new name), op=set_area (value=room), "
@@ -293,8 +296,9 @@ SPECS: list[Spec] = [
          "this machine only, never sent anywhere. op=create: makes one, waits up to a minute and confirms it's listed. "
          "op=list: the latest ones. Make one before any change that isn't undoable in one step.",
          {_o("op", "create or list"): str}, WRITE, _backup, writes=True),
-    Spec("network_check", "Check the home network", "The network from the house's side: router sensors (e.g. Fios WAN status and "
-         "speed), whether the router answers, how many Wi-Fi devices are unreachable, the WiZ bulbs' signal, error counts. Changes nothing.",
+    Spec("network_check", "Check the home network", "The network from the house's side: the router as Home Assistant knows it "
+         "(maker, model, its internet-link and speed sensors), whether it answers, how many devices on the home network are "
+         "unreachable, Wi-Fi signal where devices report it, error counts per integration. Changes nothing.",
          {}, READ, _network),
     Spec("usage", "How the house is used", "For each light, switch, fan, speaker and thermostat over the last days: changes, the hours it "
          "goes on, the days used, and whether a person or an automation did it.",

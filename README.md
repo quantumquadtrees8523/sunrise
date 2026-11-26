@@ -69,6 +69,12 @@ CONFIRMED / UNREACHABLE), `audit`, `diagnose_device`, `fix_device`, `registry_ed
 read-only / destructive annotations. The API's prompt (the MCP prompt "Sunrise") carries the fixed
 rules, the skills index and the memory index.
 
+Diagnosis works the same for every integration: Home Assistant's record of the device (its maker,
+model and how it connects), whether its address answers, its integration's state and errors. For a
+kind of device Sunrise has a helper for (WiZ today) it can also ask the device itself and move
+Home Assistant to its new address. For every other kind, the agent looks up that maker's own
+steps for that model, so the advice fits the devices in your house.
+
 Your skills live in `<config>/sunrise/skills/`, outside `custom_components`, so updates never
 overwrite them. If you or your agent edit a built-in skill, it's yours: a product update never
 replaces it.
