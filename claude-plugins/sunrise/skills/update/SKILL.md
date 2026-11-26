@@ -87,6 +87,12 @@ this file (runs inside the HA container, token on stdin).
      = the HACS id, usually `update.sunrise_update`). For Sunrise its
      `installed_version` and `latest_version` are those 7-character commits,
      and its release notes are empty, which is why you summarise from GitHub.
+   - **Once Sunrise has tagged releases,** HACS tracks those instead:
+     `version_installed` and the update entity's versions become tags such as
+     `v0.2.0`, and the entity carries the release notes. Then compare tags,
+     summarise from the release notes rather than commits (step 4: use
+     `compare/<installed tag>...<latest tag>`), and *Rollback* can use HACS's
+     Redownload with an earlier version. Handle whichever the box shows.
    - HACS only looks at GitHub on its own schedule, so `last_commit` may lag.
      GitHub is the truth for what's available.
    - On 2026.11+ HACS is the Marketplace. If `hacs.repositories` is missing,
