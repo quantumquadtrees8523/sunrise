@@ -1,5 +1,5 @@
-"""Shared test setup: a sample house loaded into a test Home Assistant, fake WiZ bulbs that
-answer their real UDP protocol on 127.0.0.x, a LAN-only guard on every socket, and a helper that
+"""Shared test setup: a made-up sample house loaded into a test Home Assistant, fake WiZ bulbs
+(for the WiZ helper) that answer their real UDP protocol on 127.0.0.x, a LAN-only guard on every socket, and a helper that
 calls this integration's tools exactly as the MCP Server does (through the registered LLM API)."""
 
 from __future__ import annotations
@@ -165,7 +165,9 @@ async def load_house(hass: HomeAssistant, *, loopback: bool = True) -> dict[str,
     dev_ids = {}
     for d in h["devices"]:
         entry = entries[d["entry"]]
-        kw = {"connections": {(dr.CONNECTION_NETWORK_MAC, N.norm_mac(d["mac"]))}} if d["mac"] else {}
+        conns = ({(dr.CONNECTION_NETWORK_MAC, N.norm_mac(d["mac"]))} if d["mac"] else set()) | (
+            {(dr.CONNECTION_ZIGBEE, d["zigbee"])} if d.get("zigbee") else set())
+        kw = {"connections": conns} if conns else {}
         dev = devs.async_get_or_create(config_entry_id=entry.entry_id, identifiers={(entry.domain, d["id"])}, name=d["name"],
                                        manufacturer=d["manufacturer"], model=d["model"],
                                        entry_type=dr.DeviceEntryType.SERVICE if d["service"] else None, **kw)
