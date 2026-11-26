@@ -97,7 +97,7 @@ Then `log_run`.
 
 ## Hands off to / called from
 
-Build an idea: `routines` or `build-a-skill`. Fragile devices: `device-diagnosis`. After a purchase: `add-a-device`.
+Build an idea: `routines` or `build-a-skill`; a dashboard: `custom-cards`. Fragile devices: `device-diagnosis`. After a purchase: `add-a-device`.
 Called from `learn-the-house`.
 
 ## Words for the owner

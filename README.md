@@ -27,6 +27,7 @@ It works out of the box, and you can change every part of it. It's free and open
 | `device-diagnosis` | a device can't be reached, is flaky, slow or wrong: finds the failing layer, fixes what software can, and looks at the hardware if you allow a camera or send a photo | only to look up the device |
 | `wifi-diagnosis` | devices keep dropping or won't come back: measures, reads the router with you signed in, fixes in order | only to look up your router and devices |
 | `improve-home` | "how could my home be smarter?": at most five ideas, each with evidence from your house; builds the ones you pick; never pitches the same idea twice | only for ideas that use a cloud service |
+| `custom-cards` | "make me a dashboard", "add a card for the lights": the house's own dashboards from a card library in its look, catalog first, stock dashboards untouched; tested, checked on a real device, undoable | only to install the build tools the first time |
 | `undo` | "what did you change?", "put it back": lists recent changes and undoes them, smallest step first | no |
 | `build-a-skill` | "make this repeatable": builds a skill from a request or from work just done, your way, tested | no |
 
