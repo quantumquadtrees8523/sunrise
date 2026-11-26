@@ -73,10 +73,20 @@ this file (runs inside the HA container, token on stdin).
 2. **What the box runs.** Through the container, printing only these keys:
    ```
    docker exec <ha> cat /config/custom_components/sunrise/manifest.json
-   docker exec <ha> python3 -c "import json;d=json.load(open('/config/.storage/hacs.repositories'))['data']
-   [print(k,{x:v.get(x) for x in ('full_name','installed','installed_commit','last_commit','version_installed','selected_tag')}) for k,v in d.items() if v.get('full_name','').lower()=='quantumquadtrees8523/sunrise']"
-   docker exec <ha> python3 -c "import json;d=json.load(open('/config/.storage/core.entity_registry'))['data']['entities']
-   [print(e['entity_id'],e['platform'],e.get('disabled_by')) for e in d if e['unique_id']=='<hacs id>']"
+   docker exec -i <ha> python3 - <<'EOF'
+   import json
+   d = json.load(open('/config/.storage/hacs.repositories'))['data']
+   for k, v in d.items():
+       if v.get('full_name', '').lower() == 'quantumquadtrees8523/sunrise':
+           print(k, {x: v.get(x) for x in ('full_name', 'installed', 'installed_commit',
+                     'last_commit', 'version_installed', 'selected_tag')})
+   EOF
+   docker exec -i <ha> python3 - <<'EOF'
+   import json
+   for e in json.load(open('/config/.storage/core.entity_registry'))['data']['entities']:
+       if e['unique_id'] == '<hacs id>':
+           print(e['entity_id'], e['platform'], e.get('disabled_by'))
+   EOF
    ```
    - **HACS tracks Sunrise by commit, not by version.** Sunrise has no tagged
      releases, so HACS installs the default branch and records the first 7
