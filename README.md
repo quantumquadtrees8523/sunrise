@@ -103,18 +103,28 @@ no add-on, no Docker changes, no token for the integration itself. There are two
 
 ```bash
 claude plugin marketplace add quantumquadtrees8523/sunrise
+claude plugin install connect-to-box@sunrise
 claude plugin install sunrise@sunrise
 ```
 
 or, inside Claude Code on version 2.1.275 or later:
 
 ```
+/plugin install connect-to-box --marketplace quantumquadtrees8523/sunrise
 /plugin install sunrise --marketplace quantumquadtrees8523/sunrise
 ```
 
-Then run `/sunrise:install`. It backs up Home Assistant, installs HACS if it's missing, adds
-Sunrise, connects Claude Code over MCP and checks it on a device you pick. You do three things
-yourself: authorize HACS with GitHub, sign in to Home Assistant, and choose the test device.
+Then run `/sunrise:install`. It first runs `/connect-to-box:connect-to-box` to find the box and
+get a key-based shell on it, then backs up Home Assistant, installs HACS if it's missing, adds
+Sunrise, connects Claude Code over MCP and checks it on a device you pick. You do a few things
+yourself, each in a prompt Claude opens for you: copy your SSH key to the box if it isn't there,
+store a Home Assistant token when the box needs one, accept HACS's terms and authorize it with
+GitHub, and choose the test device. You can also run `/connect-to-box:connect-to-box` on its own
+whenever you need a shell on the box.
+
+Both plugins live in [`claude-plugins/`](claude-plugins/) and run on the Claude side only. Neither
+is part of what HACS installs (`custom_components/sunrise/`) or of the house skills in `skills/`,
+which ship to the box.
 
 ### 2. By yourself
 

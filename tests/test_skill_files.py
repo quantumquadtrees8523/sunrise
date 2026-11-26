@@ -95,7 +95,7 @@ def test_every_tool_a_skill_names_exists() -> None:
     listed = basics.split("Their names are", 1)[1].split("When several", 1)[0]
     assert set(re.findall(r"`([a-z_]+)`", listed)) == tools
     gone = {"profile_get", "profile_update", "skill_history", "skill_revert", "memory_history", "memory_revert"}
-    texts = [*ROOT.glob("skills/**/*.md"), ROOT / "README.md", *ROOT.glob("claude-plugin/**/*.md")]
+    texts = [*ROOT.glob("skills/**/*.md"), ROOT / "README.md", *ROOT.glob("claude-plugins/**/*.md")]
     for path in texts:
         text = path.read_text(encoding="utf-8")
         assert not {g for g in gone if g in text}, path
