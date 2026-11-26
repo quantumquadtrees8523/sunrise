@@ -10,5 +10,19 @@
       "already_configured": "Sunrise is already set up.",
       "single_instance_allowed": "Sunrise is already set up."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Sunrise",
+        "description": "Sunrise only switches what you've exposed to voice assistants (Settings > Voice assistants > Expose), the same as Assist.",
+        "data": {
+          "read_unexposed": "Let Sunrise look at things that aren't exposed"
+        },
+        "data_description": {
+          "read_unexposed": "Read only, to explain why something stopped working. Turn off to keep Sunrise to exposed things entirely."
+        }
+      }
+    }
   }
 }

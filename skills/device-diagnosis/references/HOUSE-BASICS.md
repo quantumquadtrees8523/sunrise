@@ -65,6 +65,10 @@ down the old value first, change one setting, and run the same check again.
    - `NOT CONFIRMED`: the call went through but the state didn't change in time. Say so.
    - `UNREACHABLE`: it reads `unavailable`. It was not tried. Don't retry it; offer to find out
      why with `diagnose_device`.
+   - `NOT EXPOSED`: the owner hasn't exposed it to voice assistants, so Sunrise can't switch it,
+     the same as Assist. It was not tried. Say where the owner changes that (Settings → Voice
+     assistants → Expose) and leave the choice to them. Never reach it another way: not through a
+     routine, a script or another action.
 
 Never claim a change without proof from this run. Never retry a device that is unavailable.
 

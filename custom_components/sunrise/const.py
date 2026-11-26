@@ -26,6 +26,11 @@ GUARDED_PLATFORMS = (*GUARDED_DOMAINS, "cover", "climate", "water_heater", "valv
 DISCOVERY_SOURCES = ("zeroconf", "dhcp", "ssdp", "bluetooth", "homekit", "usb", "mqtt", "integration_discovery",
                      "discovery", "hassio")
 
+# Options (Settings > Devices & services > Sunrise > Configure). Off: the read tools see only what's exposed to
+# voice assistants, like everything else Sunrise does (access.py).
+CONF_READ_UNEXPOSED = "read_unexposed"
+READ_UNEXPOSED_DEFAULT = True
+
 # The opt-in cloud mode seam (see cloud.py). Off by default and nothing implements it yet.
 CONF_CLOUD_MODE = "cloud_mode"
 CLOUD_MODE_DEFAULT = False

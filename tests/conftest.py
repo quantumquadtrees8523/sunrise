@@ -197,7 +197,10 @@ async def setup_integration(hass: HomeAssistant, **runtime: Any) -> MockConfigEn
     import tempfile  # noqa: PLC0415
 
     hass.config.config_dir = runtime.get("config_dir") or tempfile.mkdtemp(prefix="sunrise-test-")  # a clean data folder
-    entry = MockConfigEntry(domain=DOMAIN, title="Sunrise", unique_id=DOMAIN)
+    from homeassistant.setup import async_setup_component  # noqa: PLC0415
+
+    assert await async_setup_component(hass, "homeassistant", {})  # what's exposed to voice assistants lives here
+    entry = MockConfigEntry(domain=DOMAIN, title="Sunrise", unique_id=DOMAIN, options=runtime.get("options") or {})
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -208,7 +211,21 @@ async def setup_integration(hass: HomeAssistant, **runtime: Any) -> MockConfigEn
     return entry
 
 
-async def call(hass: HomeAssistant, tool: str, args: dict[str, Any] | None = None, user_id: str | None = None) -> llm.ToolResult:
-    ctx = llm.LLMContext(platform="mcp_server", context=Context(user_id=user_id), language="en", assistant="conversation", device_id=None)
+SPEAKER = "speaker"  # call(..., user_id=SPEAKER): nobody signed in, as from a voice speaker
+
+
+async def owner(hass: HomeAssistant) -> str:
+    """The house's administrator, the one signed in to an agent over MCP (made once per test)."""
+    for u in await hass.auth.async_get_users():
+        if u.is_admin and not u.system_generated and u.name == "Owner":
+            return u.id
+    return (await hass.auth.async_create_user("Owner", group_ids=["system-admin"])).id
+
+
+async def call(hass: HomeAssistant, tool: str, args: dict[str, Any] | None = None, user_id: str | None = None,
+               device_id: str | None = None) -> llm.ToolResult:
+    """Call a tool as the MCP Server would: by default as the signed-in owner; user_id=SPEAKER as a voice speaker."""
+    who = None if user_id == SPEAKER else (user_id or await owner(hass))
+    ctx = llm.LLMContext(platform="mcp_server", context=Context(user_id=who), language="en", assistant="conversation", device_id=device_id)
     api = await llm.async_get_api(hass, LLM_API_ID, ctx)
     return await api.async_call_tool(llm.ToolInput(tool_name=tool, tool_args=args or {}))

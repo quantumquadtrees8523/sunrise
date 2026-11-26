@@ -40,6 +40,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SunriseEntry) -> bool:
     entry.runtime_data = rt
     entry.async_on_unload(llm.async_register_api(hass, SunriseAPI(hass, rt)))
 
+    async def options_changed(_hass: HomeAssistant, changed: SunriseEntry) -> None:
+        rt.options = dict(changed.options)  # read on every tool call: no reload needed
+
+    entry.async_on_unload(entry.add_update_listener(options_changed))
+
     rt.tally = tally = UsageTally(store)
     await hass.async_add_executor_job(tally.load)
 
