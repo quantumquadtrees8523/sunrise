@@ -27,10 +27,11 @@ def ip(octet: int) -> str:
 
 @pytest.fixture
 def bulbs(socket_enabled, monkeypatch):
-    # TCP checks (ESPHome's port, the router's web page) answer "closed" here: the test HA may only
-    # connect to 127.0.0.1. The LAN-only guard still sees every UDP packet.
+    # TCP checks (any device's address, ESPHome's port, the router's web page) answer "silent" here: the
+    # test HA may only connect to 127.0.0.1. The LAN-only guard still sees every UDP packet.
     tcp = []
-    monkeypatch.setattr(N, "tcp_open", lambda host, port, timeout=1.0: tcp.append((N._lan(host), port)) and False)
+    monkeypatch.setattr(N, "tcp_reach", lambda host, port, timeout=1.0: tcp.append((N._lan(host), port)) or "silent")
+    monkeypatch.setattr(N, "tcp_open", lambda host, port, timeout=1.0: N.tcp_reach(host, port, timeout) == "open")
     b = Bulbs({ip(215): (MAC[215], -60), ip(216): (MAC[216], -70), ip(217): (MAC[217], -79),   # working; .217 weak
                ip(230): (MAC[220], -66), ip(231): (MAC[221], -66), ip(232): (MAC[222], -66)})  # three moved
     yield b
@@ -99,7 +100,8 @@ async def test_get_my_lights_back_up(hass: HomeAssistant, bulbs) -> None:
     off = {n for n, r in rows.items() if r["cause"] == "off_network"}
     assert off == {"Bedroom Lamp", "Bedroom Ceiling", "Office Lamp", "Office Ceiling", "Hallway Light"}
     assert rows["Kitchen Pendant 1"]["cause"] == "weak_signal" and rows["Living Room Lamp"]["cause"] == "ok"
-    assert first.data["wiz_errors_since_start"] == 956
+    assert first.data["errors_since_start"]["wiz"] == 956
+    assert first.data["helpers"]["wiz"]["answered_search"] == 6
     assert "Bedroom Lamp (Bedroom)" in first.data["for_the_person"][0]
     assert rows["Bedroom Lamp"]["fix"]["person"].startswith("turn its switch off")
 
@@ -157,8 +159,8 @@ async def test_network_check_fios(hass: HomeAssistant, bulbs) -> None:
     await _house(hass, bulbs)
     res = await call(hass, "network_check")
     d = res.data
-    assert d["isp_guess"] == "fios" and d["internet"] == "on"
+    assert d["router"]["devices"][0]["model"] == "CR1000B" and d["internet"] == "on"
     assert "The internet connection is up." in d["findings"]
-    assert d["wifi_devices"]["unreachable"] >= 8
-    assert d["wiz_signal"][0]["device"] == "Kitchen Pendant 1"  # weakest first
-    assert not any("External IP" in k for k in d["router"])  # the house's public address is never needed
+    assert d["network_devices"]["unreachable"] >= 8
+    assert d["signal"][0]["device"] == "Kitchen Pendant 1" and d["signal"][0]["from"] == "wiz"  # weakest first, read live
+    assert not any("External IP" in k for k in d["router"]["sensors"])  # the house's public address is never needed

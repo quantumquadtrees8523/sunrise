@@ -112,8 +112,10 @@ async def test_audit_finds_the_problems(hass: HomeAssistant, house) -> None:
 async def test_house_map_says_how_the_house_is_set_up(hass: HomeAssistant, house) -> None:
     res = await call(hass, "house_map")
     p = res.data["setup"]
-    assert p["isp_guess"] == "fios"
+    assert "isp_guess" not in p  # the router by its own maker and model, never a guessed provider
+    assert p["router"]["devices"][0]["manufacturer"] == "Verizon" and p["router"]["devices"][0]["found_by"] == "integration"
     assert "binary_sensor.fios_router_wan_status" in p["router"]["sensors"]
+    assert not any("external_ip" in s for s in p["router"]["sensors"])
     assert res.data["counts"]["entities"] == 167  # the sample house plus sensor.sunrise_memory
     assert p["access"]["sunrise_tools"] is True and p["access"]["mcp_server"] is False
     assert "setup" not in (await call(hass, "house_map", {"room": "Kitchen"})).data

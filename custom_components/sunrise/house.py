@@ -449,7 +449,37 @@ async def undo(hass: HomeAssistant, store: Store, change_id: str) -> dict[str, A
 
 # --- the setup: what Home Assistant itself can tell ----------------------------------------------
 
-ISP_HINTS = (("fios", re.compile(r"fios|verizon|cr1000", re.I)), ("spectrum", re.compile(r"spectrum|charter|sagemcom|askey", re.I)))
+# The router as Home Assistant knows it: devices of an integration that talks to a router, or that
+# call themselves one; sensors on those devices, or that read like the internet link. Hints, not a
+# list of brands: whatever is found is reported by its own maker and model.
+ROUTER_INTEGRATIONS = {"upnp", "fritz", "netgear", "asuswrt", "unifi", "tplink_omada", "mikrotik", "keenetic_ndms2", "huawei_lte",
+                       "luci", "ubus", "ruckus_unleashed", "vodafone_station", "sfr_box", "freebox", "synology_srm", "netgear_lte"}
+SPEED_INTEGRATIONS = {"speedtestdotnet", "fastdotcom"}
+ROUTER_WORDS = re.compile(r"router|gateway|modem", re.I)
+WAN_RX = re.compile(r"(^|[._])wan([._]|$)|wan_status|internet", re.I)
+
+
+def router_facts(hass: HomeAssistant) -> dict[str, Any]:
+    """{devices: [{name, manufacturer, model, integration, found_by}], sensors: [entity ids], wan: [entity ids]}.
+    Never the house's public address."""
+    devs, ents = dr.async_get(hass), er.async_get(hass)
+    found: dict[str, dict[str, Any]] = {}
+    for d in devs.devices:
+        entry = hass.config_entries.async_get_entry(d.config_entry_id) if d.config_entry_id else None
+        by = entry.domain if entry and entry.domain in ROUTER_INTEGRATIONS else None
+        if by or ROUTER_WORDS.search(f"{d.model or ''} {d.name or ''} {d.name_by_user or ''}"):
+            found[d.id] = {"name": d.name_by_user or d.name, "manufacturer": d.manufacturer, "model": d.model,
+                           "integration": entry.domain if entry else None, "found_by": "integration" if by else "name"}
+    sensors, wan = [], []
+    for st in hass.states.async_all(("sensor", "binary_sensor")):
+        if "external_ip" in st.entity_id:
+            continue
+        reg = ents.async_get(st.entity_id)
+        if (reg and (reg.device_id in found or reg.platform in SPEED_INTEGRATIONS)) or ROUTER_WORDS.search(st.entity_id) or WAN_RX.search(st.entity_id):
+            sensors.append(st.entity_id)
+            if WAN_RX.search(st.entity_id) and st.domain == "binary_sensor":
+                wan.append(st.entity_id)
+    return {"devices": list(found.values())[:5], "sensors": sensors[:10], "wan": wan}
 
 
 async def setup_facts(hass: HomeAssistant) -> dict[str, Any]:
@@ -464,17 +494,10 @@ async def setup_facts(hass: HomeAssistant) -> dict[str, Any]:
     install = str(info.get("installation_type") or "Unknown")
     kind = {"Home Assistant OS": "haos", "Home Assistant Container": "container", "Home Assistant Supervised": "supervised", "Unsupported Third Party Container": "container",
             "Home Assistant Core": "core"}.get(install, "unknown")
-    router: dict[str, Any] = {}
-    isp = "unknown"
-    devs = dr.async_get(hass)
-    texts = [s.entity_id for s in hass.states.async_all()] + [f"{d.manufacturer} {d.model} {d.name}" for d in devs.devices]
-    for name, rx in ISP_HINTS:
-        hits = [t for t in texts if rx.search(t or "")]
-        if hits:
-            isp = name
-            router["evidence"] = hits[:3]
-            break
-    router["sensors"] = [s.entity_id for s in hass.states.async_all() if re.search(r"router|wan_status|gateway", s.entity_id)][:10]
+    found = router_facts(hass)
+    router: dict[str, Any] = {"devices": found["devices"], "sensors": found["sensors"]}
+    if not found["devices"]:
+        router["note"] = "Home Assistant doesn't know the router; ask the person, and keep its make, model and provider in house.md."
     mcp = [e for e in hass.config_entries.async_entries("mcp_server")]
     served = []
     for e in mcp:
@@ -489,7 +512,7 @@ async def setup_facts(hass: HomeAssistant) -> dict[str, Any]:
     return {"install_type": kind, "install_type_words": install, "ha_version": HA_VERSION,
             "access": {"sunrise_tools": True, "mcp_server": bool(mcp),
                        "mcp_serves_this_api": LLM_API_ID in served or "all" in served},
-            "isp_guess": isp, "router": router, "remote_access": remote or ["none_detected"]}
+            "router": router, "remote_access": remote or ["none_detected"]}
 
 
 # --- usage -----------------------------------------------------------------------------------------
