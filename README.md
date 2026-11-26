@@ -21,6 +21,7 @@ It works out of the box, and you can change every part of it. It's free and open
 
 | Skill | Use it when | Needs the internet? |
 |---|---|---|
+| `welcome` | right after install, or "get started": learns the house, makes one routine with you to show how asking works, then looks for what would help most if you want; asks "keep going, or stop here?" after each step and picks up where you stopped | only if an idea in the last step uses a cloud service |
 | `learn-the-house` | first run, or "get to know my house": reads Home Assistant, asks at most five questions, fills memory, shows what it now knows | no |
 | `add-a-device` | "I bought a new light": identifies it, gives you the pairing steps, names it, puts it in its room, tests it | only to look up the device |
 | `routines` | "do X when Y": restates it, checks it, saves it, runs it once to test, puts things back; change or remove one the same way | no |

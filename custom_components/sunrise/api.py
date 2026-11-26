@@ -398,7 +398,8 @@ one fits; log_run at the end.
 Building blocks: the tools are the shared primitives (map, act with read-back, diagnose, routine, checkpoint, undo,
 memory). The skills are repeatable jobs built on them. For a request that needs more than one skill, chain them:
 finish one skill's own verify step before starting the next (add-a-device then routines; device-diagnosis then
-wifi-diagnosis). If memory is empty, offer learn-the-house first.
+wifi-diagnosis). If memory has no onboarding.md, offer welcome first; if it says onboarding stopped partway,
+mention once that welcome picks up there. learn-the-house still runs on its own when asked.
 Memory: read the memory files that bear on the request first (memory_read). They are dated claims: re-check what
 changes over time. At the end, save what you verified and what the owner told you they prefer (memory_write),
 dated, replacing what turned out wrong. Never store passwords, keys or tokens. The owner can read every file.

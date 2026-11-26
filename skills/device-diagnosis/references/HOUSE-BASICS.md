@@ -30,6 +30,7 @@ Assistant as `sensor.sunrise_memory`):
 - `house.md`: facts about this house, the test device, what is off on purpose.
 - `playbooks/<thing>.md`: how one router, brand or system works here (pages, quirks, what its numbers mean).
 - `suggestions.md`: every idea already pitched and what the person said, so it isn't pitched twice.
+- `onboarding.md`: how far the welcome walk-through got, so it picks up at the right stage.
 - `log.md`: dated runs, newest first.
 
 Read the files that bear on the request before you start (`memory_list`, `memory_read`). They are

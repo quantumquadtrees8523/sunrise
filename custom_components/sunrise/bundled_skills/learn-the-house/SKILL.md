@@ -60,7 +60,7 @@ read or edit it, and ask me to forget anything").
 
 ## Hands off to / called from
 
-Offered by the prompt when memory is empty. Unreachable devices they did not turn off: `device-diagnosis`.
+Called from `welcome`, as its first stage; also run on its own when asked. Unreachable devices they did not turn off: `device-diagnosis`.
 Things to tidy or improve: `improve-home`.
 
 ## Report

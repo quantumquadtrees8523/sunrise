@@ -390,8 +390,8 @@ the container).
 
 ## After a pass
 
-Say it worked in one line, then offer the first skill: "Say **learn the
-house** and I'll walk it once and fill in memory." Don't start it unasked.
+Say it worked in one line, then offer the first skill: "Say **get started**
+and I'll walk you through setting up your home." Don't start it unasked.
 
 ## Rollback
 
