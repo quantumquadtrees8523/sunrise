@@ -1,6 +1,6 @@
 ---
 name: add-a-device
-description: Brings a new device or service into the house - identifies it from its label, a photo or what Home Assistant discovered, finds the right integration, gives the owner the exact pairing or sign-in steps, names it the way people say it, puts it in its room, makes it available to voice and assistants if wanted, tests it with read-back, and records it in memory. Use when someone says "I bought a new light", "add this plug", "connect my speaker" or "set up this account".
+description: Brings a new device or service into the house - identifies it from its label, a photo or what Home Assistant discovered, finds the right integration, adds a discovered one that needs only a yes or gives the owner the exact pairing or sign-in steps, names it the way people say it, puts it in its room, makes it available to voice and assistants if wanted, tests it with read-back, and records it in memory. Use when someone says "I bought a new light", "add this plug", "connect my speaker" or "set up this account".
 ---
 
 # Add a device
@@ -43,9 +43,15 @@ Exit: maker, model, connection type, the integration, and anything missing (say 
 
 1. Power it and put it in pairing mode: give the maker's steps, at most 3 at a time.
 2. If it joins the home network through the maker's app, the owner does that first.
-3. Check whether Home Assistant discovered it (`house_map` everything=true, or its Discovered list).
-4. The owner adds the integration or accepts the discovered device in Home Assistant, and signs
-   in there if it asks.
+3. Check whether Home Assistant discovered it: `discovered` op=list (its Discovered list), and
+   `house_map` everything=true in case it was already added.
+4. Discovered, and its `needs` is confirm (just a yes): say which device it is ("BulbCo found
+   Porch Bulb, model A19. Add it?"), and on the owner's yes, `discovered` op=accept with
+   confirmed=true. A lock, alarm, door, gate, heating or valve needs that yes for this device by
+   name. It returns change_id: "undo that" removes it.
+5. Anything else (fields to fill, a sign-in, a code, a choice, or not discovered at all): the
+   owner adds it in Home Assistant (Settings → Devices & services → Discovered, or Add
+   integration) and signs in there if it asks. Give the steps for that integration, at most 3.
 
 Exit: Home Assistant lists the device. If it never appears: `device-diagnosis`; if the evidence
 says Wi-Fi (won't join, joins then drops): `wifi-diagnosis`.
@@ -77,7 +83,8 @@ Then `log_run`.
 ## Hands off to / called from
 
 Won't appear or misbehaves: `device-diagnosis`. Wi-Fi evidence: `wifi-diagnosis`. Automate it: `routines`.
-Called from `improve-home` after a purchase.
+Called from `improve-home` after a purchase. Called from `welcome` (stage 2), once per waiting
+device, with the name and room the owner already agreed: don't ask them again.
 
 ## Words for the owner
 

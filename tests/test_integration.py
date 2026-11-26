@@ -14,7 +14,7 @@ from custom_components.sunrise.const import DOMAIN, LLM_API_ID, LLM_API_NAME
 
 from .conftest import call, setup_integration
 
-EXPECTED_TOOLS = {"house_map", "act", "audit", "diagnose_device", "fix_device", "registry_edit", "undo", "changes", "routine",
+EXPECTED_TOOLS = {"house_map", "act", "audit", "diagnose_device", "fix_device", "registry_edit", "undo", "changes", "routine", "discovered",
                   "backup", "network_check", "usage", "list_skills", "get_skill", "skill_update", "log_run", "memory_list",
                   "memory_read", "memory_write", "memory_delete", "behavior_log", "behavior_revert"}
 
@@ -53,7 +53,7 @@ async def test_tools_listed_with_schemas_and_annotations(hass: HomeAssistant) ->
     by = {t.name: t.annotations for t in ours}
     for name in ("house_map", "audit", "diagnose_device", "network_check", "list_skills", "get_skill", "behavior_log", "usage"):
         assert by[name].read_only, name
-    for name in ("act", "fix_device", "registry_edit", "skill_update", "undo", "behavior_revert"):
+    for name in ("act", "fix_device", "registry_edit", "discovered", "skill_update", "undo", "behavior_revert"):
         assert not by[name].read_only and by[name].destructive, name
     assert by["act"].open_world  # it can call any action, some of which reach outside
     assert all(not by[n].open_world for n in EXPECTED_TOOLS - {"act"})
