@@ -436,6 +436,9 @@ async def undo(hass: HomeAssistant, store: Store, change_id: str) -> dict[str, A
             raise HomeAssistantError("that device's integration entry is gone; nothing to undo")
         hass.config_entries.async_update_entry(entry, data={**entry.data, "host": before})
         await hass.config_entries.async_reload(entry.entry_id)
+    elif op == "add_integration":
+        if hass.config_entries.async_get_entry(target):
+            await hass.config_entries.async_remove(target)
     elif op in ("routine_save", "routine_delete"):
         from .routines import undo_routine  # noqa: PLC0415
 

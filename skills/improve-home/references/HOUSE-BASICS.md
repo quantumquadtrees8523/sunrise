@@ -6,7 +6,7 @@ How to operate a Home Assistant house safely. Not a skill by itself: every skill
 
 These skills assume the Sunrise integration's tools, reached through Home Assistant's MCP
 Server (endpoint `/api/mcp/sunrise`). Their names are `house_map`, `act`, `audit`,
-`diagnose_device`, `fix_device`, `registry_edit`, `routine`, `changes`, `undo`, `backup`, `network_check`, `usage`,
+`diagnose_device`, `fix_device`, `registry_edit`, `discovered`, `routine`, `changes`, `undo`, `backup`, `network_check`, `usage`,
 `list_skills`, `get_skill`, `skill_update`, `memory_list`, `memory_read`, `memory_write`, `memory_delete`,
 `behavior_log`, `behavior_revert`, `log_run`. When several of Home Assistant's APIs are combined, the same tools appear
 with a prefix, such as `sunrise__house_map`.

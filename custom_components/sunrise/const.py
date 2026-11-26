@@ -17,6 +17,14 @@ RELOAD_WAIT_S = 3.0  # after a reload, before reading the entry and its entities
 # Locks, alarms and garage doors move only with the person's yes in the same conversation (rule S2).
 GUARDED_DOMAINS = ("lock", "alarm_control_panel")
 GUARDED_DEVICE_CLASSES = ("garage", "door", "gate")
+# A discovered integration that can make any of these is accepted only with the owner's yes for that device.
+# Covers count because doors and gates are covers, and which kind it is only shows once it's added.
+GUARDED_PLATFORMS = (*GUARDED_DOMAINS, "cover", "climate", "water_heater", "valve")
+
+# Where a device Home Assistant found by itself (its Discovered list) came from. Not user, reauth,
+# reconfigure, import, ignore or system: those aren't discoveries waiting for a yes.
+DISCOVERY_SOURCES = ("zeroconf", "dhcp", "ssdp", "bluetooth", "homekit", "usb", "mqtt", "integration_discovery",
+                     "discovery", "hassio")
 
 # The opt-in cloud mode seam (see cloud.py). Off by default and nothing implements it yet.
 CONF_CLOUD_MODE = "cloud_mode"
