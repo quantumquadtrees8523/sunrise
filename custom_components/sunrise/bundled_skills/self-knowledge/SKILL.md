@@ -102,6 +102,12 @@ the house, its own switches and tools. Sunrise doesn't know that product's facts
 
 Exit: the question answered from what was read, with nothing claimed beyond it.
 
+## Hands off to / called from
+
+A thing they want done: the skill that does it (`add-a-device`, `routines`, `device-diagnosis`,
+`wifi-diagnosis`, `custom-cards`, `improve-home`). One idea they want explained: `explain`. First-time
+setup: `welcome`. Called from any skill, and by the rules, before an agent says it can't do something.
+
 ## Verify
 
 Before sending: every number, version and "can't" in your answer came from a tool result in this
