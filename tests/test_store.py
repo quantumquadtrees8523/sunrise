@@ -140,6 +140,35 @@ def test_built_ins_follow_the_product_until_the_user_edits_them(tmp_path) -> Non
     assert not {x["name"]: x for x in s.list()}["build-a-skill"]["user_edited"]
 
 
+def test_a_built_in_edited_by_hand_is_kept_across_restarts_and_updates(tmp_path) -> None:
+    s = Store(tmp_path)
+    shipped = tmp_path / "v1"
+    src = SHIPPED / "build-a-skill" / "SKILL.md"
+    (shipped / "build-a-skill").mkdir(parents=True)
+    (shipped / "build-a-skill" / "SKILL.md").write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+    s.install_shipped(shipped, "0.1.0")
+    # The owner edits the file directly on the box, not through skill_update.
+    path = tmp_path / "skills" / "build-a-skill" / "SKILL.md"
+    path.write_text(path.read_text(encoding="utf-8") + "\nThe hallway bulb is on the 2-way switch.\n", encoding="utf-8")
+    # A restart with the same product text keeps the edit, and from then on it is theirs.
+    done = Store(tmp_path).install_shipped(shipped, "0.1.0")
+    assert "build-a-skill" in done["kept_user_copy"] and "2-way switch" in path.read_text(encoding="utf-8")
+    assert {x["name"]: x for x in s.list()}["build-a-skill"]["user_edited"]
+    # So is an update with a new product text: kept, and flagged.
+    newer = tmp_path / "v2"
+    (newer / "build-a-skill").mkdir(parents=True)
+    (newer / "build-a-skill" / "SKILL.md").write_text(
+        src.read_text(encoding="utf-8").replace("Done means", "Done, always, means"), encoding="utf-8")
+    done = Store(tmp_path).install_shipped(newer, "0.2.0")
+    assert "build-a-skill" in done["kept_user_copy"] and "2-way switch" in path.read_text(encoding="utf-8")
+    listed = {x["name"]: x for x in s.list()}["build-a-skill"]
+    assert listed["user_edited"] and listed.get("update_available")
+    # Putting the file back to the shipped text by hand makes it follow the product again.
+    path.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+    done = Store(tmp_path).install_shipped(newer, "0.2.0")
+    assert "build-a-skill" in done["updated"] and "Done, always, means" in path.read_text(encoding="utf-8")
+
+
 def test_weakens_rules_spots_dropped_safety_words() -> None:
     assert weakens_rules("take a backup first", "go") == ["it drops 'backup', which the current version relies on"]
     assert weakens_rules("x", "x and more") == []
