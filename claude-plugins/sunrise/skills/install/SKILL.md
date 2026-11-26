@@ -397,6 +397,7 @@ the container).
 
 Say it worked in one line, then offer the first skill: "Say **get started**
 and I'll walk you through setting up your home." Don't start it unasked.
+For later updates, the owner says "update sunrise" (`/sunrise:update`).
 
 ## Rollback
 
