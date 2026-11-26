@@ -13,7 +13,7 @@
     {
       "name": "sunrise",
       "source": "./claude-plugins/sunrise",
-      "description": "Install Sunrise on a Home Assistant box (connect via connect-to-box, checkpoint, HACS, the integration, MCP) and verify it on a real device."
+      "description": "Install Sunrise on a Home Assistant box (connect via connect-to-box, checkpoint, HACS, the integration, MCP) and verify it on a real device; explain any technical idea along the way in plain words."
     }
   ]
 }

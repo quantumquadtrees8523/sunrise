@@ -32,6 +32,13 @@ starting clean. A box that has been lived in for years is the normal case, not
 an obstacle. The owner's time and data are worth more than your convenience. A
 fresh install is only ever a last resort the owner raises.
 
+**Explain as you go.** When a term may be new to the owner (SSH key, mDNS,
+certificate), explain it in one plain sentence. For more, use `sunrise:explain`
+if it's installed. This plugin can be installed without Sunrise, so otherwise
+explain it inline in the same shape: what it is with an everyday comparison,
+why it matters at this step, what they'd see or do, and whether it's safe to
+ignore. Then carry on from the same step.
+
 ## Hard rules
 
 - **Never type, print or store passwords or tokens.** You can't authenticate

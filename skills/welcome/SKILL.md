@@ -42,7 +42,8 @@ End: `log.md` (date, "welcome", stages done, what was made), then `log_run`.
 
 1. `onboarding.md` says finished: say so in one line, and offer the things to say next (phase 5).
 2. It says a stage is done: "Last time we got through <stage>. Pick up with <next>?" (default: yes).
-3. Nothing yet: say what is coming in one breath, then start stage 1.
+3. Nothing yet: say what is coming in one breath, and that they can ask you to explain anything
+   technical, then start stage 1.
 
 Exit: the stage to start at.
 
@@ -116,21 +117,23 @@ One short screen:
 - What was set up, stage by stage, and how to undo each change.
 - What memory holds now (house, owner, routines, suggestions) and where ("Home Assistant's
   `sunrise/memory` folder; you can read or edit it, and ask me to forget anything").
-- 3 or 4 things they can say next: "add a device", "make a routine", "why isn't the <device>
-  working?", "what did you change?".
+- 4 or 5 things they can say next: "add a device", "make a routine", "why isn't the <device>
+  working?", "what did you change?", "explain <anything>".
 
 Write `onboarding.md` as finished, then `log.md` and `log_run`.
 
 ## Hands off to / called from
 
-Runs `learn-the-house`, then `routines`, then `improve-home`. "Undo that": `undo`. A device the quick
-win needs is unreachable: offer another idea first, and `device-diagnosis` if they want it fixed.
+Runs `learn-the-house`, then `routines`, then `improve-home`. "Undo that": `undo`. "Explain X":
+explain, then back to the same stage. A device the quick win needs is unreachable: offer another
+idea first, and `device-diagnosis` if they want it fixed.
 Offered by the prompt when onboarding isn't finished, and after install ("say get started").
 
 ## Words for the owner
 
 - Start: "I'll set up your home in three short steps: learn the house, make one routine together,
-  then look for what would help most. You can stop after any of them."
+  then look for what would help most. You can stop after any of them, and if I say something
+  technical, ask me to explain it."
 - Between stages: "That's done. Keep going, or stop here? Say get started any time to pick up."
 - Teaching: "Notice I said it back in one sentence first. That's your chance to correct me."
 - Resume: "Last time we learned the house. Shall we make your first routine?"
