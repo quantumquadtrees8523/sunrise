@@ -395,8 +395,12 @@ the container).
 
 ## After a pass
 
-Say it worked in one line, then offer the first skill: "Say **get started**
-and I'll walk you through setting up your home." Don't start it unasked.
+Say it worked in one line, then ask once: "Set up your home now?" (default:
+yes). Yes: go straight into Sunrise's `welcome` (`get_skill` name=welcome over
+the new MCP connection) and follow it from its phase 1, which picks up
+wherever memory says onboarding got to. No: "Say **get started** any
+time and I'll walk you through it." That is the only question here; don't ask
+it twice or start `welcome` without the yes.
 
 ## Rollback
 
