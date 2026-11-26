@@ -11,6 +11,7 @@ import difflib
 import re
 import time
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from datetime import timedelta
 from typing import Any
 
@@ -23,10 +24,13 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.util import dt as dt_util
 
+from .access import device_seen, seen
 from .const import ACT_CUTOFF_S, GUARDED_DEVICE_CLASSES, GUARDED_DOMAINS, LLM_API_ID
 from .store import Store
 
 DOWN = ("unavailable",)
+# Ways to name targets inside an action's data; `act` takes its things only in entity_ids, where each is checked.
+TARGET_KEYS = frozenset({"entity_id", "device_id", "area_id", "floor_id", "label_id"})
 NO_READING = ("unknown",)
 SKIP_DOMAINS = ("update", "event", "persistent_notification", "conversation", "tts", "stt", "wake_word", "assist_satellite_hidden")
 NOT_DEVICES = ("automation", "script", "scene", "zone", "person", "sun", "update", "event", "input_boolean", "input_number",
@@ -61,7 +65,7 @@ def _shown(ent: er.RegistryEntry | None, entity_id: str) -> bool:
 
 def counts(hass: HomeAssistant) -> dict[str, Any]:
     ents, devs, areas = er.async_get(hass), dr.async_get(hass), ar.async_get(hass)
-    states = hass.states.async_all()
+    states = [s for s in hass.states.async_all() if seen(s.entity_id)]
     no_area = 0
     for st in states:
         ent = ents.async_get(st.entity_id)
@@ -81,6 +85,8 @@ async def house_map(hass: HomeAssistant, room: str | None = None, everything: bo
     floors = fr.async_get(hass)
     rooms: dict[str | None, dict[str, Any]] = {}
     for st in sorted(hass.states.async_all(), key=lambda s: s.entity_id):
+        if not seen(st.entity_id):
+            continue
         ent = ents.async_get(st.entity_id)
         if not everything and not _shown(ent, st.entity_id):
             continue
@@ -104,8 +110,9 @@ async def house_map(hass: HomeAssistant, room: str | None = None, everything: bo
     return {"rooms": out, "counts": counts(hass), **({} if room else {"setup": await setup_facts(hass)})}
 
 
-def nearest(hass: HomeAssistant, entity_id: str, n: int = 3) -> list[str]:
-    return difflib.get_close_matches(entity_id, [s.entity_id for s in hass.states.async_all()], n=n, cutoff=0.5)
+def nearest(hass: HomeAssistant, entity_id: str, n: int = 3, only: Callable[[str], bool] | None = None) -> list[str]:
+    ids = [s.entity_id for s in hass.states.async_all() if (only is None or only(s.entity_id))]
+    return difflib.get_close_matches(entity_id, ids, n=n, cutoff=0.5)
 
 
 # --- act, then read back ------------------------------------------------------------------------
@@ -148,20 +155,28 @@ def guarded(hass: HomeAssistant, entity_id: str) -> bool:
 
 
 async def act(hass: HomeAssistant, action: str, entity_ids: list[str], data: dict[str, Any] | None, *,
-              context: Context | None, confirmed: bool = False, cutoff: float = ACT_CUTOFF_S) -> dict[str, Any]:
-    """Perform one action on some things, then read each back: CHECKED, NOT CONFIRMED or UNREACHABLE."""
+              context: Context | None, confirmed: bool = False, cutoff: float = ACT_CUTOFF_S,
+              allowed: Callable[[str], bool] | None = None) -> dict[str, Any]:
+    """Perform one action on some things, then read each back: CHECKED, NOT CONFIRMED or UNREACHABLE.
+    `allowed` is the exposure check (access.py): a thing it says no to is NOT EXPOSED and isn't tried."""
     data = dict(data or {})
     domain, _, service = (action or "").partition(".")
     if not domain or not service or not hass.services.has_service(domain, service):
         raise HomeAssistantError(f"{action!r} isn't an action this Home Assistant has")
     if not entity_ids:
         raise HomeAssistantError("name the things to act on in entity_ids (from house_map); nothing was done")
+    if smuggled := sorted(TARGET_KEYS & set(data)):
+        raise HomeAssistantError(f"name the things in entity_ids, not in data ({', '.join(smuggled)}); nothing was done")
     rows: list[dict[str, Any]] = []
     todo: list[str] = []
     for eid in dict.fromkeys(entity_ids):
         st = hass.states.get(eid)
         if st is None:
-            rows.append({"id": eid, "result": "NOT FOUND", "nearest": nearest(hass, eid)})
+            rows.append({"id": eid, "result": "NOT FOUND", "nearest": nearest(hass, eid, only=allowed)})
+        elif allowed is not None and not allowed(eid):
+            rows.append({"id": eid, "name": _name(hass, eid), "result": "NOT EXPOSED",
+                         "why": "the owner hasn't exposed it to voice assistants, so Sunrise can't switch it either. "
+                                "Only the owner changes that: Settings > Voice assistants > Expose"})
         elif guarded(hass, eid) and not confirmed:
             rows.append({"id": eid, "name": _name(hass, eid), "result": "REFUSED",
                          "why": "locks, alarms and garage doors move only after the person says yes in this conversation (confirmed=true)"})
@@ -256,12 +271,14 @@ async def audit(hass: HomeAssistant, store: Store) -> dict[str, Any]:
     entry_domain = {e.entry_id: e.domain for e in hass.config_entries.async_entries()}
     dead: dict[str, dict[str, Any]] = {}
     leftovers, unroomed_devices, unroomed_things, bad_names = [], [], [], []
-    orphan_ids = {e.entity_id for e in ents.entities.values() if _orphaned(hass, e)}
+    orphan_ids = {e.entity_id for e in ents.entities.values() if seen(e.entity_id) and _orphaned(hass, e)}
     for e in ents.entities.values():
         if e.entity_id in orphan_ids:
             leftovers.append({"id": e.entity_id, "name": _name(hass, e.entity_id, e), "kind": e.domain})
     by_device: dict[str, list[State]] = defaultdict(list)
     for st in hass.states.async_all():
+        if not seen(st.entity_id):
+            continue
         ent = ents.async_get(st.entity_id)
         if ent and ent.device_id:
             by_device[ent.device_id].append(st)
@@ -288,7 +305,7 @@ async def audit(hass: HomeAssistant, store: Store) -> dict[str, Any]:
         if BAD_NAME_RX.search(dev.name_by_user or dev.name or ""):
             bad_names.append({"device_id": did, "name": dev.name_by_user or dev.name})
     duplicates = []
-    autos = [s for s in hass.states.async_all("automation") if s.entity_id not in orphan_ids]
+    autos = [s for s in hass.states.async_all("automation") if s.entity_id not in orphan_ids and seen(s.entity_id)]
     by_name: dict[str, list[State]] = defaultdict(list)
     for s in autos:
         by_name[_norm(str(s.attributes.get("friendly_name") or s.entity_id))].append(s)
@@ -297,7 +314,7 @@ async def audit(hass: HomeAssistant, store: Store) -> dict[str, Any]:
             duplicates.append({"kind": "automation", "what": f"{len(group)} automations named like "
                                f"{group[0].attributes.get('friendly_name')!r}",
                                "ids": [s.entity_id for s in group], "on": [s.entity_id for s in group if s.state == "on"]})
-    weather = [s for s in hass.states.async_all("weather")]
+    weather = [s for s in hass.states.async_all("weather") if seen(s.entity_id)]
     if len(weather) > 1:
         duplicates.append({"kind": "weather", "what": f"{len(weather)} weather services", "ids": [s.entity_id for s in weather]})
     noisy = {d: v for d, v in system_log_counts(hass).items() if v["count"] >= 20}
@@ -468,6 +485,8 @@ def router_facts(hass: HomeAssistant) -> dict[str, Any]:
     devs, ents = dr.async_get(hass), er.async_get(hass)
     found: dict[str, dict[str, Any]] = {}
     for d in devs.devices:
+        if not device_seen(hass, d.id):
+            continue
         entry = hass.config_entries.async_get_entry(d.config_entry_id) if d.config_entry_id else None
         by = entry.domain if entry and entry.domain in ROUTER_INTEGRATIONS else None
         if by or ROUTER_WORDS.search(f"{d.model or ''} {d.name or ''} {d.name_by_user or ''}"):
@@ -475,7 +494,7 @@ def router_facts(hass: HomeAssistant) -> dict[str, Any]:
                            "integration": entry.domain if entry else None, "found_by": "integration" if by else "name"}
     sensors, wan = [], []
     for st in hass.states.async_all(("sensor", "binary_sensor")):
-        if "external_ip" in st.entity_id:
+        if "external_ip" in st.entity_id or not seen(st.entity_id):
             continue
         reg = ents.async_get(st.entity_id)
         if (reg and (reg.device_id in found or reg.platform in SPEED_INTEGRATIONS)) or ROUTER_WORDS.search(st.entity_id) or WAN_RX.search(st.entity_id):
@@ -555,7 +574,7 @@ async def usage(hass: HomeAssistant, tally: UsageTally | None, days: int = 14) -
     """How each controllable thing was used: changes and on-hours from the recorder's history,
     plus who made the changes from the live tally."""
     days = max(1, min(int(days), 30))
-    ids = [s.entity_id for s in hass.states.async_all() if s.domain in USAGE_DOMAINS]
+    ids = [s.entity_id for s in hass.states.async_all() if s.domain in USAGE_DOMAINS and seen(s.entity_id)]
     hist: dict[str, list] = {}
     if "recorder" in hass.config.components and ids:
         from homeassistant.components.recorder import get_instance, history  # noqa: PLC0415

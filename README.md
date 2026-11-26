@@ -75,6 +75,24 @@ kind of device Sunrise has a helper for (WiZ today) it can also ask the device i
 Home Assistant to its new address. For every other kind, the agent looks up that maker's own
 steps for that model, so the advice fits the devices in your house.
 
+### What Sunrise may touch
+
+Sunrise sits behind Home Assistant's own permissions and never changes them:
+
+- **Switching things:** `act` works only on what you've exposed to voice assistants (Settings →
+  Voice assistants → Expose), the same list Assist follows, whoever is asking. Anything else comes
+  back NOT EXPOSED, untried.
+- **Changing the setup** (routines, names, rooms, device fixes, adding devices, undo, checkpoints)
+  needs someone signed in as an administrator. A voice speaker can't do it, and Assist can't either.
+  A signed-in non-administrator can look but not change anything.
+- **Looking:** by default the read tools can also see things that aren't exposed, read only, so
+  diagnosis can say why something stopped working. To turn that off, go to Settings → Devices &
+  services → Sunrise → Configure, and untick "Let Sunrise look at things that aren't exposed".
+- **The room:** when a voice speaker asks, Sunrise knows the speaker's room, so "the lights" means
+  that room's lights.
+
+Ticking Sunrise for a voice assistant never lets it do anything Assist couldn't already do.
+
 Your skills live in `<config>/sunrise/skills/`, outside `custom_components`, so updates never
 overwrite them. If you or your agent edit a built-in skill, it's yours: a product update never
 replaces it.

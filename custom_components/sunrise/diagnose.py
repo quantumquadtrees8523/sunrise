@@ -28,6 +28,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
 from . import net as N
+from .access import device_seen, seen
 from .const import RELOAD_WAIT_S
 from .helpers import HELPERS, label
 from .house import router_facts, system_log_counts
@@ -84,11 +85,11 @@ def devices(hass: HomeAssistant) -> list[Dev]:
     ents, devs, areas = er.async_get(hass), dr.async_get(hass), ar.async_get(hass)
     by_dev: dict[str, list[str]] = {}
     for e in ents.entities.values():
-        if e.device_id and not e.disabled_by:
+        if e.device_id and not e.disabled_by and seen(e.entity_id):
             by_dev.setdefault(e.device_id, []).append(e.entity_id)
     out = []
     for d in devs.devices:
-        if d.disabled_by or d.entry_type is not None:
+        if d.disabled_by or d.entry_type is not None or not device_seen(hass, d.id):
             continue
         entry = next((x for x in (hass.config_entries.async_get_entry(i) for i in d.config_entries) if x), None)
         states = [s for s in (hass.states.get(e) for e in by_dev.get(d.id, [])) if s]
@@ -332,6 +333,8 @@ async def network_check(hass: HomeAssistant, store: Store, net: N.Net) -> dict[s
     reading: dict[str, tuple[float, str]] = {}
     for st in hass.states.async_all("sensor"):
         if st.attributes.get("unit_of_measurement") != "dBm" and st.attributes.get("device_class") != "signal_strength":
+            continue
+        if not seen(st.entity_id):
             continue
         reg = ents.async_get(st.entity_id)
         try:

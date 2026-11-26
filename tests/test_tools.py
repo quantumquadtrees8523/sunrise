@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 from pytest_homeassistant_custom_component.common import async_mock_service
 
+from homeassistant.components.homeassistant.exposed_entities import async_expose_entity
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
@@ -75,6 +76,7 @@ async def test_act_never_tries_unavailable_things(hass: HomeAssistant, house) ->
 
 async def test_act_refuses_locks_without_a_yes_and_unknown_ids(hass: HomeAssistant, house) -> None:
     hass.states.async_set("lock.front_door", "locked", {"friendly_name": "Front door"})
+    async_expose_entity(hass, "conversation", "lock.front_door", True)  # locks aren't exposed by default
     calls = async_mock_service(hass, "lock", "unlock")
     async_mock_service(hass, "light", "turn_on")
     res = await call(hass, "act", {"action": "lock.unlock", "entity_ids": ["lock.front_door"]})

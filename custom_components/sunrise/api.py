@@ -21,9 +21,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import llm
 
+from . import access as A
 from . import diagnose as D
 from . import house as H
-from .const import DOMAIN, LLM_API_ID, LLM_API_NAME
+from .const import CONF_READ_UNEXPOSED, DOMAIN, LLM_API_ID, LLM_API_NAME, READ_UNEXPOSED_DEFAULT
 from .net import Net
 from .store import CHECKS, BehaviorError, MemoryError_, SkillError, Store, sanitize, score
 
@@ -52,6 +53,12 @@ class Spec:
     annotations: llm.ToolAnnotations
     handler: Handler
     writes: bool = False
+    # Changes the house's setup (not just switching a thing): only a signed-in administrator, never a voice speaker.
+    # True for every call, or a test on the arguments for tools that also read (routine op=list, ...).
+    setup: bool | Callable[[dict[str, Any]], bool] = False
+
+    def changes_setup(self, args: dict[str, Any]) -> bool:
+        return self.setup(args) if callable(self.setup) else self.setup
 
 
 READ = llm.ToolAnnotations(read_only=True, destructive=False, idempotent=True, open_world=False)
@@ -70,12 +77,15 @@ def _job(hass: HomeAssistant, fn, *args, **kw):
 # --- handlers -----------------------------------------------------------------------------------
 
 async def _house_map(hass, rt, a, ctx):
-    return await H.house_map(hass, a.get("room"), bool(a.get("everything")))
+    out = await H.house_map(hass, a.get("room"), bool(a.get("everything")))
+    if room := A.asking_from(hass, ctx):
+        out["asking_from"] = room
+    return out
 
 
 async def _act(hass, rt, a, ctx):
     return await H.act(hass, a["action"], list(a.get("entity_ids") or []), a.get("data") or {}, context=ctx.context,
-                       confirmed=bool(a.get("confirmed")),
+                       confirmed=bool(a.get("confirmed")), allowed=partial(A.exposed, hass, ctx.assistant),
                        **({"cutoff": rt.act_cutoff} if rt.act_cutoff else {}))
 
 
@@ -281,18 +291,19 @@ SPECS: list[Spec] = [
          "at a device's new address through its integration's own setup, where Sunrise has a helper for that kind of device (WiZ "
          "today; host optional: found by searching the network); keeps the old address for undo. Never the router, Wi-Fi or passwords.",
          {_r("op", "reload_entry or update_host"): str, _r("target", "device_id from diagnose_device"): str,
-          _o("host", "update_host: the new address"): str}, CHANGES, _fix, writes=True),
+          _o("host", "update_host: the new address"): str}, CHANGES, _fix, writes=True, setup=True),
     Spec("registry_edit", "Rename or move a thing", "One undoable registry change: op=rename (value=new name), op=set_area (value=room), "
          "op=create_area (value=room name), op=remove_entity (only a leftover whose setup was deleted). Returns change_id for undo.",
          {_r("op", "rename, set_area, create_area or remove_entity"): str, _o("target", "entity id or device id"): str,
-          _o("value", "the new name or the room"): str}, CHANGES, _registry_edit, writes=True),
+          _o("value", "the new name or the room"): str}, CHANGES, _registry_edit, writes=True, setup=True),
     Spec("discovered", "Devices Home Assistant found", "Devices Home Assistant discovered on the network that nobody added yet. "
          "op=list: each one's integration, the name, model or address Home Assistant shows, how it was found, and what it needs "
          "now: confirm (just a yes), fields, sign_in or choice. op=accept: add one whose step is a plain confirm, with "
          "confirmed=true after the owner's yes for that device; returns change_id for undo. Anything needing a sign-in, code "
          "or password the owner finishes in Home Assistant. Locks, alarms, doors, heating and valves need that yes too.",
          {_o("op", "list or accept"): str, _o("flow_id", "accept: the one to add, from op=list"): str,
-          _o("confirmed", "the owner said yes to adding exactly this device"): bool}, CHANGES, _discovered, writes=True),
+          _o("confirmed", "the owner said yes to adding exactly this device"): bool}, CHANGES, _discovered, writes=True,
+         setup=lambda a: (a.get("op") or "list") != "list"),
     Spec("changes", "What Sunrise changed", "The latest changes made to the house through these tools, newest first: what, which "
          "thing, when, and whether it was undone. Each has a change_id for undo. Changes nothing.",
          {_o("limit", "how many, default 20"): int}, READ, _changes),
@@ -302,13 +313,14 @@ SPECS: list[Spec] = [
          "skipping its conditions. op=delete: remove it (undoable). Locks, alarms, garage doors, heating and sound need confirmed=true.",
          {_o("op", "list, get, check, save, try or delete"): str, _o("id", "the routine's id (omit to make a new one)"): str,
           _o("config", "the automation: alias, description, triggers, conditions, actions, mode"): dict,
-          _o("confirmed", "the person said yes to exactly this, in this conversation"): bool}, CHANGES, _routine, writes=True),
+          _o("confirmed", "the person said yes to exactly this, in this conversation"): bool}, CHANGES, _routine, writes=True,
+         setup=lambda a: (a.get("op") or "list") not in ("list", "get", "check")),
     Spec("undo", "Undo a change", "Put back one change made by registry_edit, fix_device, routine or discovered, by its change_id.",
-         {_r("change_id", "from the change's result"): str}, CHANGES_IDEMPOTENT, _undo, writes=True),
+         {_r("change_id", "from the change's result"): str}, CHANGES_IDEMPOTENT, _undo, writes=True, setup=True),
     Spec("backup", "Checkpoint Home Assistant", "A checkpoint to go back to if something breaks: a Home Assistant backup kept on "
          "this machine only, never sent anywhere. op=create: makes one, waits up to a minute and confirms it's listed. "
          "op=list: the latest ones. Make one before any change that isn't undoable in one step.",
-         {_o("op", "create or list"): str}, WRITE, _backup, writes=True),
+         {_o("op", "create or list"): str}, WRITE, _backup, writes=True, setup=lambda a: (a.get("op") or "list") != "list"),
     Spec("network_check", "Check the home network", "The network from the house's side: the router as Home Assistant knows it "
          "(maker, model, its internet-link and speed sensors), whether it answers, how many devices on the home network are "
          "unreachable, Wi-Fi signal where devices report it, error counts per integration. Changes nothing.",
@@ -381,9 +393,14 @@ class SkillTool(llm.Tool):
         started = time.time()
         if self.spec.writes and not await _may_write(hass, llm_context):
             result, error = {"error": "Only a Home Assistant administrator's agent can change things."}, True
+        elif self.spec.changes_setup(args) and A.speaker(llm_context):
+            result, error = {"error": "Changing the house's setup needs someone signed in to Home Assistant as an administrator. "
+                                      "A voice speaker can only do what Assist could: switch the things that are exposed."}, True
         else:
+            private = not self.rt.options.get(CONF_READ_UNEXPOSED, READ_UNEXPOSED_DEFAULT)
             try:
-                result, error = await self.spec.handler(hass, self.rt, args, llm_context), False
+                with A.view(partial(A.exposed, hass, llm_context.assistant) if private else None):
+                    result, error = await self.spec.handler(hass, self.rt, args, llm_context), False
             except (HomeAssistantError, ValueError, KeyError) as exc:
                 result, error = {"error": str(exc).strip("'\"")}, True
         if isinstance(result, dict) and result.get("error") and not error:
@@ -407,7 +424,8 @@ Fixed rules: never change router settings, Wi-Fi or passwords on your own (give 
 may read or change the router, after the person signs in themselves and says yes to each change; never type or
 store a password); never lock, unlock, arm or open anything without the person's yes; take a checkpoint (backup op=create, confirmed; it stays on this machine) before a change that isn't undoable in
 one step; every change undoable; unavailable means unreachable (diagnose, don't retry); suggest, never decide;
-stay on the home network.
+stay on the home network; you switch only what the owner exposed to voice assistants: NOT EXPOSED means say where
+they change that (Settings > Voice assistants > Expose), never reach it another way (a routine, a script, another action).
 Done means: the real outcome, read back (act says CHECKED); plain words; at most 3 numbered steps for a person;
 never a wrong instruction (house_map's setup says how this Home Assistant is installed; house.md says the rest);
 never claim success without read-back; no ids, addresses or jargon unless asked. Follow a skill (get_skill) when
@@ -442,5 +460,7 @@ class SunriseAPI(llm.API):
                 tools += (await async_get_tools(self.hass, llm_context, self.id)).tools
         except ImportError:
             pass
-        return llm.APIInstance(api=self, api_prompt=f"{RULES}\n\nSkills (get_skill name=...):\n{index}\n\nMemory (memory_read name=...):\n{memory}",
+        here = A.asking_from(self.hass, llm_context)
+        where = f"\n\nThe person is speaking from a device in {here}: \"the lights\" and the like mean that room's unless they say otherwise." if here else ""
+        return llm.APIInstance(api=self, api_prompt=f"{RULES}{where}\n\nSkills (get_skill name=...):\n{index}\n\nMemory (memory_read name=...):\n{memory}",
                                llm_context=llm_context, tools=tools, custom_serializer=llm.selector_serializer)
