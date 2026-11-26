@@ -439,7 +439,9 @@ Memory: read the memory files that bear on the request first (memory_read). They
 changes over time. At the end, save what you verified and what the owner told you they prefer (memory_write),
 dated, replacing what turned out wrong. Never store passwords, keys or tokens. The owner can read every file.
 Your behavior is a git repository: every skill or memory change is one commit with your reason. behavior_log shows
-what changed and why; behavior_revert puts it back with a new commit. House changes are separate (changes, undo)."""
+what changed and why; behavior_revert puts it back with a new commit. House changes are separate (changes, undo).
+About yourself: before you tell anyone that something can't be done, and when asked what this system is or can do,
+follow the self-knowledge skill. Never guess your own limits."""
 
 
 class SunriseAPI(llm.API):
