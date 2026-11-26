@@ -122,12 +122,15 @@ Sunrise, connects Claude Code over MCP and checks it on a device you pick. You d
 yourself, each in a prompt Claude opens for you: copy your SSH key to the box if it isn't there,
 store a Home Assistant token when the box needs one, accept HACS's terms and authorize it with
 GitHub, and choose the test device. You can also run `/connect-to-box:connect-to-box` on its own
-whenever you need a shell on the box.
+whenever you need a shell on the box. To update later, say "update sunrise" (`/sunrise:update`;
+on a plugin older than 0.4.0, first `claude plugin marketplace update sunrise && claude plugin
+update sunrise@sunrise`, then restart Claude Code).
 
 | Claude-side skill | Use it when | Needs the internet? |
 |---|---|---|
 | `/connect-to-box:connect-to-box` | "get me onto the box": finds it, gets a key-based shell, keeps a record of how | no |
 | `/sunrise:install` | installing Sunrise: checkpoint, HACS, the integration, MCP, a check on a real device | yes, to download HACS and Sunrise |
+| `/sunrise:update` | "update sunrise", "is there a new version?": says what's new and asks, checkpoints, updates the box in place (one restart, your memory and edited skills kept), checks it, then updates these plugins | yes, to download the update |
 | `/sunrise:explain` | "what's mDNS?" at any point, the install included: a plain-words explanation with sources, then back to the same step | only to look the idea up |
 
 Both plugins live in [`claude-plugins/`](claude-plugins/) and run on the Claude side only. Neither

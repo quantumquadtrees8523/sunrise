@@ -401,6 +401,7 @@ the new MCP connection) and follow it from its phase 1, which picks up
 wherever memory says onboarding got to. No: "Say **get started** any
 time and I'll walk you through it." That is the only question here; don't ask
 it twice or start `welcome` without the yes.
+For later updates, the owner says "update sunrise" (`/sunrise:update`).
 
 ## Rollback
 
