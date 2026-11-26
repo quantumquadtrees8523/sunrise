@@ -62,8 +62,8 @@ Plain Markdown in `<config>/sunrise/memory/` that the agent writes and you can o
 ### Tools
 
 Served as the **Sunrise** API: `house_map`, `act` (does it, then reads it back: CHECKED / NOT
-CONFIRMED / UNREACHABLE), `audit`, `diagnose_device`, `fix_device`, `registry_edit`, `routine`
-(automations: check, save, try, delete), `changes`, `undo`, `backup` (a local checkpoint),
+CONFIRMED / UNREACHABLE), `audit`, `diagnose_device`, `fix_device`, `registry_edit`, `discovered` (devices Home Assistant
+found: lists them, and adds one that needs only a yes), `routine` (automations: check, save, try, delete), `changes`, `undo`, `backup` (a local checkpoint),
 `network_check`, `usage`, `list_skills`, `get_skill`, `skill_update`, `memory_list`, `memory_read`,
 `memory_write`, `memory_delete`, `behavior_log`, `behavior_revert`, `log_run`. Each declares honest
 read-only / destructive annotations. The API's prompt (the MCP prompt "Sunrise") carries the fixed

@@ -96,6 +96,12 @@ async def _registry_edit(hass, rt, a, ctx):
     return await H.registry_edit(hass, rt.store, a["op"], a.get("target", ""), a.get("value"))
 
 
+async def _discovered(hass, rt, a, ctx):
+    from . import discovered  # noqa: PLC0415
+
+    return await discovered.discovered(hass, rt.store, a)
+
+
 async def _undo(hass, rt, a, ctx):
     return await H.undo(hass, rt.store, a["change_id"])
 
@@ -277,6 +283,13 @@ SPECS: list[Spec] = [
          "op=create_area (value=room name), op=remove_entity (only a leftover whose setup was deleted). Returns change_id for undo.",
          {_r("op", "rename, set_area, create_area or remove_entity"): str, _o("target", "entity id or device id"): str,
           _o("value", "the new name or the room"): str}, CHANGES, _registry_edit, writes=True),
+    Spec("discovered", "Devices Home Assistant found", "Devices Home Assistant discovered on the network that nobody added yet. "
+         "op=list: each one's integration, the name, model or address Home Assistant shows, how it was found, and what it needs "
+         "now: confirm (just a yes), fields, sign_in or choice. op=accept: add one whose step is a plain confirm, with "
+         "confirmed=true after the owner's yes for that device; returns change_id for undo. Anything needing a sign-in, code "
+         "or password the owner finishes in Home Assistant. Locks, alarms, doors, heating and valves need that yes too.",
+         {_o("op", "list or accept"): str, _o("flow_id", "accept: the one to add, from op=list"): str,
+          _o("confirmed", "the owner said yes to adding exactly this device"): bool}, CHANGES, _discovered, writes=True),
     Spec("changes", "What Sunrise changed", "The latest changes made to the house through these tools, newest first: what, which "
          "thing, when, and whether it was undone. Each has a change_id for undo. Changes nothing.",
          {_o("limit", "how many, default 20"): int}, READ, _changes),
@@ -287,7 +300,7 @@ SPECS: list[Spec] = [
          {_o("op", "list, get, check, save, try or delete"): str, _o("id", "the routine's id (omit to make a new one)"): str,
           _o("config", "the automation: alias, description, triggers, conditions, actions, mode"): dict,
           _o("confirmed", "the person said yes to exactly this, in this conversation"): bool}, CHANGES, _routine, writes=True),
-    Spec("undo", "Undo a change", "Put back one change made by registry_edit, fix_device or routine, by its change_id.",
+    Spec("undo", "Undo a change", "Put back one change made by registry_edit, fix_device, routine or discovered, by its change_id.",
          {_r("change_id", "from the change's result"): str}, CHANGES_IDEMPOTENT, _undo, writes=True),
     Spec("backup", "Checkpoint Home Assistant", "A checkpoint to go back to if something breaks: a Home Assistant backup kept on "
          "this machine only, never sent anywhere. op=create: makes one, waits up to a minute and confirms it's listed. "
