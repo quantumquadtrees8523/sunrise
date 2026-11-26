@@ -58,7 +58,7 @@ says Wi-Fi (won't join, joins then drops): `wifi-diagnosis`.
 
 ## Phase 3: name and place
 
-1. Name it as people will say it, following the house's habit ("Office Desk Lamp").
+1. Name it as people will say it, following the house's habit ("Den Reading Lamp").
    `registry_edit` op=rename.
 2. Put it in its room: `registry_edit` op=set_area (op=create_area first if the room is new).
 3. If they want it by voice or from an assistant, tell them where to turn that on for this device.

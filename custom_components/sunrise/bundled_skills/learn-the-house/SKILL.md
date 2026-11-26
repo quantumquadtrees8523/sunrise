@@ -26,7 +26,7 @@ Ask only what it can't know, at most 5 questions, one at a time, each with a def
 2. `house_map`: its `setup` (how Home Assistant is installed, its version, how the house is
    reached), then rooms, the devices in each, what each can do, how each connects.
 3. `audit`: what is unreachable, has no room, is duplicated or unclear; noisy integrations.
-4. `network_check`: the router if Home Assistant knows it; hubs and coordinators.
+4. `network_check`: the router by maker and model if Home Assistant knows it; hubs and coordinators.
 5. `routine` op=list: what already runs by itself.
 
 Exit: a draft of `house.md` with nothing from the owner yet.
@@ -45,8 +45,9 @@ Skip any question memory already answers. Stop asking the moment they want to mo
 
 ## Phase 3: write memory
 
-- `house.md`: rooms and what is in each (names as people say them), hubs and the router if known,
-  how things connect, off on purpose, known flaky, the test device, existing routines.
+- `house.md`: rooms and what is in each (names as people say them), the makers and models of each
+  kind of device, hubs and the router if known, how things connect, off on purpose, known flaky,
+  the test device, existing routines. Later advice is tailored from this, not from a general guess.
 - `owner.md`: how they want reports, quiet hours, never-touch list, who lives here (if offered).
 - `log.md`: the date, "learned the house", counts, open questions.
 

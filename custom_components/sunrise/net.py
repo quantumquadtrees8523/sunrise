@@ -1,10 +1,12 @@
 """The home network, as Home Assistant's host sees it. Plain blocking Python (Home Assistant code
 runs it in the executor).
 
-WiZ bulbs speak JSON over UDP port 38899: `getPilot` gives the MAC, state and Wi-Fi signal (RSSI),
-`getSystemConfig` the MAC and firmware, and a `registration` broadcast plus a sweep of the subnet
-finds every bulb that answers. A bulb is matched to Home Assistant by MAC, which tells a bulb that
-moved to a new address apart from one that is off the network.
+For any device with an address: whether something there answers a TCP connection (`tcp_reach`),
+which works for every kind of device. Then the protocol of each kind Sunrise has a helper for
+(helpers.py), today WiZ: JSON over UDP port 38899, where `getPilot` gives the MAC, state and Wi-Fi
+signal (RSSI), `getSystemConfig` the MAC and firmware, and a `registration` broadcast plus a sweep
+of the subnet finds every bulb that answers. A bulb is matched to Home Assistant by MAC, which
+tells a bulb that moved to a new address apart from one that is off the network.
 
 Local only: every packet this module sends goes to a LAN address (`is_lan`), checked in code.
 """
@@ -163,13 +165,21 @@ def wiz_discover(net: Net, subnets: list[str]) -> dict[str, str]:
     return found
 
 
-def tcp_open(ip: str, port: int, timeout: float = 1.0) -> bool:
-    """A LAN device's port answers (ESPHome 6053, a router's web page 80)."""
+def tcp_reach(ip: str, port: int, timeout: float = 1.0) -> str:
+    """Whether a LAN device is there, from one TCP connection: "open" (the port accepts), "refused"
+    (the device itself said no, so it is on the network) or "silent" (nothing answered)."""
     try:
         with socket.create_connection((_lan(ip), port), timeout=timeout):
-            return True
+            return "open"
+    except ConnectionRefusedError:
+        return "refused"
     except OSError:
-        return False
+        return "silent"
+
+
+def tcp_open(ip: str, port: int, timeout: float = 1.0) -> bool:
+    """A LAN device's port answers (ESPHome 6053, a router's web page 80)."""
+    return tcp_reach(ip, port, timeout) == "open"
 
 
 # --- classification -----------------------------------------------------------------------------
@@ -185,8 +195,12 @@ CAUSES = {
                     "is off) or is stuck; it still knows the Wi-Fi, so turning its power off for 10 seconds and on once "
                     "usually brings it back."),
     "forgot_wifi": ("It still doesn't answer after its power was turned off and on, so it has most likely forgotten the "
-                    "Wi-Fi. Only this kind needs re-pairing, in the WiZ phone app over Bluetooth."),
+                    "Wi-Fi. Only this kind needs re-pairing, with its maker's own steps."),
     "unreachable": "It doesn't answer on the network: no power, or not connected.",
+    "still_unreachable": ("It still doesn't answer on the network after its power was turned off and on: it may have lost "
+                          "the Wi-Fi, or it may be faulty."),
+    "radio_silent": ("It reaches Home Assistant by radio (Zigbee, Z-Wave, Bluetooth or Thread), not an address I can check, "
+                     "and it has gone quiet: most often a flat battery, out of range, or it left its network."),
     "unknown_address": "Home Assistant doesn't say what address it uses, so I couldn't check it on the network.",
     "derived": "It's built inside Home Assistant from other things, and one of those is missing.",
 }
@@ -194,9 +208,9 @@ CAUSES = {
 
 def classify_wiz(*, down: bool, ha_mac: str | None, host: str | None, probe: dict[str, Any] | None,
                  found: dict[str, str], power_cycled: bool, entry_loaded: bool = True) -> dict[str, Any]:
-    """Sort one WiZ bulb into a cause: (a) moved = on the Wi-Fi at a new address, fix in software;
-    (b) off_network = power-cycle at the switch; (c) forgot_wifi = still gone after a power cycle,
-    re-pair in the WiZ app. Plus the in-between cases a reload fixes."""
+    """Sort one WiZ bulb into a cause (the WiZ helper's check): (a) moved = on the Wi-Fi at a new
+    address, fix in software; (b) off_network = power-cycle at the switch; (c) forgot_wifi = still
+    gone after a power cycle, re-pair in the WiZ app. Plus the in-between cases a reload fixes."""
     probe = probe or {"answers": False}
     new_ip = found.get(ha_mac or "")
     out: dict[str, Any] = {"answers": bool(probe.get("answers"))}
@@ -234,7 +248,10 @@ def fix_for(cause: str) -> dict[str, str] | None:
         "not_loaded": {"tool": "fix_device", "op": "reload_entry", "what": "restart Home Assistant's connection to it"},
         "other_device_at_host": {"tool": "diagnose_device", "what": "search again; the bulb itself may have moved"},
         "off_network": {"person": "turn its switch off, wait 10 seconds, turn it on once; then check again with power_cycled=true"},
-        "forgot_wifi": {"person": "re-pair it in the WiZ phone app (add a light, follow the app; it uses Bluetooth)"},
-        "unreachable": {"person": "check it has power; turn it off for 10 seconds and on again"},
+        "forgot_wifi": {"person": "re-pair it with the Wi-Fi following its maker's own steps (usually the maker's phone app)"},
+        "unreachable": {"person": "check it has power; turn it off for 10 seconds and on again; then check again with power_cycled=true"},
+        "still_unreachable": {"person": "reconnect it to the Wi-Fi following its maker's own steps (its app or manual)"},
+        "radio_silent": {"person": "check its battery and that it's near a powered device on the same network; if it stays quiet, "
+                                  "re-pair it following its maker's own steps"},
         "weak_signal": {"person": "its Wi-Fi signal is weak: move it, or the router, closer, or add a 2.4 GHz access point near it"},
     }.get(cause)

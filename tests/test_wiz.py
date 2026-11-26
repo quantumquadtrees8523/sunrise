@@ -1,4 +1,4 @@
-"""The first real case: 8 of 11 WiZ bulbs unavailable. Fake bulbs answer WiZ's own UDP
+"""The WiZ helper: 8 of the sample house's 11 WiZ bulbs unavailable. Fake bulbs answer WiZ's own UDP
 protocol on 127.0.0.x (the sample house's 10.0.0.x), so the diagnosis sorts each dead bulb into:
 (a) moved (on the Wi-Fi at a new address: fixed in software through WiZ's config flow),
 (b) off_network (power-cycle at the switch), (c) forgot_wifi (only these need the WiZ app)."""
@@ -27,10 +27,11 @@ def ip(octet: int) -> str:
 
 @pytest.fixture
 def bulbs(socket_enabled, monkeypatch):
-    # TCP checks (ESPHome's port, the router's web page) answer "closed" here: the test HA may only
-    # connect to 127.0.0.1. The LAN-only guard still sees every UDP packet.
+    # TCP checks (any device's address, ESPHome's port, the router's web page) answer "silent" here: the
+    # test HA may only connect to 127.0.0.1. The LAN-only guard still sees every UDP packet.
     tcp = []
-    monkeypatch.setattr(N, "tcp_open", lambda host, port, timeout=1.0: tcp.append((N._lan(host), port)) and False)
+    monkeypatch.setattr(N, "tcp_reach", lambda host, port, timeout=1.0: tcp.append((N._lan(host), port)) or "silent")
+    monkeypatch.setattr(N, "tcp_open", lambda host, port, timeout=1.0: N.tcp_reach(host, port, timeout) == "open")
     b = Bulbs({ip(215): (MAC[215], -60), ip(216): (MAC[216], -70), ip(217): (MAC[217], -79),   # working; .217 weak
                ip(230): (MAC[220], -66), ip(231): (MAC[221], -66), ip(232): (MAC[222], -66)})  # three moved
     yield b
@@ -94,21 +95,22 @@ async def test_get_my_lights_back_up(hass: HomeAssistant, bulbs) -> None:
     await _house(hass, bulbs)
     first = await call(hass, "diagnose_device", {"target": "all my lights"})
     rows = by_name(first.data["devices"])
-    assert {n for n, r in rows.items() if r["cause"] == "moved"} == {"Kitchen Pendant 2", "Kitchen Pendant 3", "Living Room Ceiling 2"}
-    assert rows["Kitchen Pendant 2"]["found_at"] == ip(230)
+    assert {n for n, r in rows.items() if r["cause"] == "moved"} == {"Kitchen Island 2", "Kitchen Island 3", "Den Ceiling 2"}
+    assert rows["Kitchen Island 2"]["found_at"] == ip(230)
     off = {n for n, r in rows.items() if r["cause"] == "off_network"}
-    assert off == {"Bedroom Lamp", "Bedroom Ceiling", "Office Lamp", "Office Ceiling", "Hallway Light"}
-    assert rows["Kitchen Pendant 1"]["cause"] == "weak_signal" and rows["Living Room Lamp"]["cause"] == "ok"
-    assert first.data["wiz_errors_since_start"] == 956
-    assert "Bedroom Lamp (Bedroom)" in first.data["for_the_person"][0]
-    assert rows["Bedroom Lamp"]["fix"]["person"].startswith("turn its switch off")
+    assert off == {"Loft Lamp", "Loft Ceiling", "Study Lamp", "Study Ceiling", "Hallway Light"}
+    assert rows["Kitchen Island 1"]["cause"] == "weak_signal" and rows["Den Lamp"]["cause"] == "ok"
+    assert first.data["errors_since_start"]["wiz"] == 956
+    assert first.data["helpers"]["wiz"]["answered_search"] == 6
+    assert "Loft Lamp (Loft)" in first.data["for_the_person"][0]
+    assert rows["Loft Lamp"]["fix"]["person"].startswith("turn its switch off")
 
     # (a) fix the moved ones in software, through WiZ's own config flow, with undo.
     FakeWizFlow.NET = net(bulbs)
     mock_platform(hass, "wiz.config_flow", None)
     with mock_config_flow("wiz", FakeWizFlow):
         fixed = []
-        for name in ("Kitchen Pendant 2", "Kitchen Pendant 3", "Living Room Ceiling 2"):
+        for name in ("Kitchen Island 2", "Kitchen Island 3", "Den Ceiling 2"):
             res = await call(hass, "fix_device", {"op": "update_host", "target": rows[name]["device_id"]})
             assert res.data["ok"], res.data
             fixed.append(res.data)
@@ -121,10 +123,10 @@ async def test_get_my_lights_back_up(hass: HomeAssistant, bulbs) -> None:
     bulbs.add(ip(234), MAC[224])
     again = await call(hass, "diagnose_device", {"target": "all my lights", "power_cycled": True})
     rows = by_name(again.data["devices"])
-    assert rows["Bedroom Lamp"]["cause"] == "answering" and rows["Bedroom Lamp"]["fix"]["op"] == "reload_entry"
-    assert rows["Bedroom Ceiling"]["cause"] == "moved"
+    assert rows["Loft Lamp"]["cause"] == "answering" and rows["Loft Lamp"]["fix"]["op"] == "reload_entry"
+    assert rows["Loft Ceiling"]["cause"] == "moved"
     # (c) the three still silent after a power cycle forgot the Wi-Fi: only these get re-paired.
-    assert {n for n, r in rows.items() if r["cause"] == "forgot_wifi"} == {"Office Lamp", "Office Ceiling", "Hallway Light"}
+    assert {n for n, r in rows.items() if r["cause"] == "forgot_wifi"} == {"Study Lamp", "Study Ceiling", "Hallway Light"}
     assert any("WiZ phone app" in s and "Hallway Light" in s for s in again.data["for_the_person"])
     # Remembered next time without the flag.
     third = await call(hass, "diagnose_device", {"target": "Hallway Light"})
@@ -137,7 +139,7 @@ async def test_get_my_lights_back_up(hass: HomeAssistant, bulbs) -> None:
 
 async def test_update_host_refuses_wrong_bulb_and_non_lan(hass: HomeAssistant, bulbs) -> None:
     await _house(hass, bulbs)
-    dev = next(r for r in (await call(hass, "diagnose_device", {"target": "Kitchen Pendant 2"})).data["devices"])
+    dev = next(r for r in (await call(hass, "diagnose_device", {"target": "Kitchen Island 2"})).data["devices"])
     wrong = await call(hass, "fix_device", {"op": "update_host", "target": dev["device_id"], "host": ip(215)})
     assert wrong.data["ok"] is False and "different one" in wrong.data["error"]
     outside = await call(hass, "fix_device", {"op": "update_host", "target": dev["device_id"], "host": "8.8.8.8"})
@@ -148,17 +150,17 @@ async def test_update_host_refuses_wrong_bulb_and_non_lan(hass: HomeAssistant, b
 
 async def test_reload_entry_reads_back(hass: HomeAssistant, bulbs) -> None:
     await _house(hass, bulbs)
-    dev = next(r for r in (await call(hass, "diagnose_device", {"target": "Living Room Lamp"})).data["devices"])
+    dev = next(r for r in (await call(hass, "diagnose_device", {"target": "Den Lamp"})).data["devices"])
     res = await call(hass, "fix_device", {"op": "reload_entry", "target": dev["device_id"]})
     assert res.data["read_back"]["connection"] == "loaded" and res.data["ok"]
 
 
-async def test_network_check_fios(hass: HomeAssistant, bulbs) -> None:
+async def test_network_check(hass: HomeAssistant, bulbs) -> None:
     await _house(hass, bulbs)
     res = await call(hass, "network_check")
     d = res.data
-    assert d["isp_guess"] == "fios" and d["internet"] == "on"
+    assert d["router"]["devices"][0]["model"] == "AX3000" and d["internet"] == "on"
     assert "The internet connection is up." in d["findings"]
-    assert d["wifi_devices"]["unreachable"] >= 8
-    assert d["wiz_signal"][0]["device"] == "Kitchen Pendant 1"  # weakest first
-    assert not any("External IP" in k for k in d["router"])  # the house's public address is never needed
+    assert d["network_devices"]["unreachable"] >= 8
+    assert d["signal"][0]["device"] == "Kitchen Island 1" and d["signal"][0]["from"] == "wiz"  # weakest first, read live
+    assert not any("External IP" in k for k in d["router"]["sensors"])  # the house's public address is never needed

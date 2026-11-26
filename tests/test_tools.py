@@ -25,10 +25,10 @@ async def test_house_map_rooms_devices_states(hass: HomeAssistant, house) -> Non
     res = await call(hass, "house_map")
     assert not res.error
     rooms = {r["room"]: r for r in res.data["rooms"]}
-    assert set(rooms) == {"Living Room", "Kitchen", "Bedroom", "Office", None}
+    assert set(rooms) == {"Den", "Kitchen", "Loft", "Study", None}
     kitchen = {d["device"] for d in rooms["Kitchen"]["devices"]}
-    assert {"Kitchen Pendant 1", "Kitchen Pendant 2", "Kitchen Pendant 3"} <= kitchen
-    lamp = next(t for d in rooms["Living Room"]["devices"] for t in d["things"] if t["id"] == "light.living_room_lamp")
+    assert {"Kitchen Island 1", "Kitchen Island 2", "Kitchen Island 3"} <= kitchen
+    lamp = next(t for d in rooms["Den"]["devices"] for t in d["things"] if t["id"] == "light.den_lamp")
     assert lamp["state"] == "on"
     # diagnostic and config things stay out of the compact map
     assert not any("signal_strength" in t["id"] for r in res.data["rooms"] for d in r["devices"] for t in d["things"])
@@ -55,20 +55,20 @@ def _light_service(hass: HomeAssistant, lands: bool = True):
 
 async def test_act_checked_after_read_back(hass: HomeAssistant, house) -> None:
     _light_service(hass)
-    res = await call(hass, "act", {"action": "light.turn_on", "entity_ids": ["light.kitchen_pendant_1"], "data": {"brightness_pct": 40}})
+    res = await call(hass, "act", {"action": "light.turn_on", "entity_ids": ["light.kitchen_island_1"], "data": {"brightness_pct": 40}})
     row = res.data["results"][0]
     assert row["result"] == "CHECKED" and row["now"] == "on" and row["brightness_pct"] == 40
 
 
 async def test_act_not_confirmed_when_state_doesnt_change(hass: HomeAssistant, house) -> None:
     _light_service(hass, lands=False)
-    res = await call(hass, "act", {"action": "light.turn_on", "entity_ids": ["light.kitchen_pendant_1"]})
+    res = await call(hass, "act", {"action": "light.turn_on", "entity_ids": ["light.kitchen_island_1"]})
     assert res.data["results"][0]["result"] == "NOT CONFIRMED"
 
 
 async def test_act_never_tries_unavailable_things(hass: HomeAssistant, house) -> None:
     calls = async_mock_service(hass, "light", "turn_off")
-    res = await call(hass, "act", {"action": "light.turn_off", "entity_ids": ["light.kitchen_pendant_2"]})
+    res = await call(hass, "act", {"action": "light.turn_off", "entity_ids": ["light.kitchen_island_2"]})
     assert res.data["results"][0]["result"] == "UNREACHABLE"
     assert calls == []
 
@@ -79,10 +79,10 @@ async def test_act_refuses_locks_without_a_yes_and_unknown_ids(hass: HomeAssista
     async_mock_service(hass, "light", "turn_on")
     res = await call(hass, "act", {"action": "lock.unlock", "entity_ids": ["lock.front_door"]})
     assert res.data["results"][0]["result"] == "REFUSED" and calls == []
-    res = await call(hass, "act", {"action": "light.turn_on", "entity_ids": ["light.kitchen_pendant_9"]})
+    res = await call(hass, "act", {"action": "light.turn_on", "entity_ids": ["light.kitchen_island_9"]})
     row = res.data["results"][0]
-    assert row["result"] == "NOT FOUND" and "light.kitchen_pendant_1" in row["nearest"]
-    bad = await call(hass, "act", {"action": "light.explode", "entity_ids": ["light.kitchen_pendant_1"]})
+    assert row["result"] == "NOT FOUND" and "light.kitchen_island_1" in row["nearest"]
+    bad = await call(hass, "act", {"action": "light.explode", "entity_ids": ["light.kitchen_island_1"]})
     assert bad.error
 
 
@@ -100,20 +100,22 @@ async def test_audit_finds_the_problems(hass: HomeAssistant, house) -> None:
     assert d["noisy"]["wiz"]["count"] == 956
     assert "<address>" in d["noisy"]["wiz"]["top"]
     assert d["changed_since_last"] is None
-    assert "Home Assistant Voice 01" in d["unroomed"]["devices"]
+    assert "Voice Satellite 1" in d["unroomed"]["devices"]
     # A second audit says what changed.
-    hass.states.async_set("light.kitchen_pendant_2", "off", {"friendly_name": "Kitchen Pendant 2"})
-    for eid in ("sensor.kitchen_pendant_2_signal_strength",):
+    hass.states.async_set("light.kitchen_island_2", "off", {"friendly_name": "Kitchen Island 2"})
+    for eid in ("sensor.kitchen_island_2_signal_strength",):
         hass.states.async_set(eid, "-70")
     again = await call(hass, "audit")
-    assert "Kitchen Pendant 2" in again.data["changed_since_last"]["back_now"]
+    assert "Kitchen Island 2" in again.data["changed_since_last"]["back_now"]
 
 
 async def test_house_map_says_how_the_house_is_set_up(hass: HomeAssistant, house) -> None:
     res = await call(hass, "house_map")
     p = res.data["setup"]
-    assert p["isp_guess"] == "fios"
-    assert "binary_sensor.fios_router_wan_status" in p["router"]["sensors"]
+    assert "isp_guess" not in p  # the router by its own maker and model, never a guessed provider
+    assert p["router"]["devices"][0]["manufacturer"] == "Acme Networks" and p["router"]["devices"][0]["found_by"] == "integration"
+    assert "binary_sensor.acme_ax3000_wan_status" in p["router"]["sensors"]
+    assert not any("external_ip" in s for s in p["router"]["sensors"])
     assert res.data["counts"]["entities"] == 167  # the sample house plus sensor.sunrise_memory
     assert p["access"]["sunrise_tools"] is True and p["access"]["mcp_server"] is False
     assert "setup" not in (await call(hass, "house_map", {"room": "Kitchen"})).data
@@ -123,6 +125,67 @@ async def test_setup_install_type(hass: HomeAssistant, house) -> None:
     with patch("homeassistant.helpers.system_info.async_get_system_info", return_value={"installation_type": "Home Assistant Container"}):
         res = await call(hass, "house_map")
     assert res.data["setup"]["install_type"] == "container"
+
+
+def _network(monkeypatch, answers: dict[str, str] | None = None) -> list:
+    """No real connections: each address answers a TCP check as given (default "silent"); WiZ bulbs don't answer."""
+    from custom_components.sunrise import net as N  # noqa: PLC0415
+
+    asked: list = []
+
+    def reach(host, port, timeout=1.0):
+        asked.append((N._lan(host), port))
+        return (answers or {}).get(host, "silent")
+
+    monkeypatch.setattr(N, "tcp_reach", reach)
+    monkeypatch.setattr(N, "tcp_open", lambda host, port, timeout=1.0: reach(host, port, timeout) == "open")
+    monkeypatch.setattr(N, "wiz_probe", lambda host, net: {"answers": False})
+    return asked
+
+
+async def test_diagnose_any_device_without_a_helper(hass: HomeAssistant, house, monkeypatch) -> None:
+    """The general path: a Wi-Fi plug Sunrise has no helper for gets HA's record, a check of its
+    address, and advice tailored to its maker and model."""
+    asked = _network(monkeypatch)
+    res = await call(hass, "diagnose_device", {"target": "Garage plug"})
+    row = res.data["devices"][0]
+    assert (row["integration"], row["manufacturer"], row["model"], row["connection"]) == ("shelly", "Shelly", "Plug US", "network")
+    assert row["cause"] == "unreachable" and row["answers"] is False and asked == [("127.0.0.234", 80)]  # its integration's port
+    assert "no helper for shelly" in row["tailor"] and "Shelly Plug US" in row["tailor"]
+    assert any("Garage plug" in line for line in res.data["for_the_person"])
+    assert res.data["errors_since_start"] == {"shelly": 12} and "helpers" not in res.data
+    # Still silent after a power cycle: its maker's own steps to reconnect it, remembered next time.
+    again = await call(hass, "diagnose_device", {"target": "Garage plug", "power_cycled": True})
+    assert again.data["devices"][0]["cause"] == "still_unreachable" and "maker's own steps" in again.data["devices"][0]["fix"]["person"]
+    assert (await call(hass, "diagnose_device", {"target": "Garage plug"})).data["devices"][0]["cause"] == "still_unreachable"
+    # Back on the network (a refused port means the device itself answered): reconnect in software.
+    _network(monkeypatch, {"127.0.0.234": "refused"})
+    back = (await call(hass, "diagnose_device", {"target": "Garage plug"})).data["devices"][0]
+    assert back["cause"] == "not_loaded" and back["fix"]["op"] == "reload_entry" and "tailor" not in back
+    # Moving it to a new address is only for kinds with a helper.
+    moved = await call(hass, "fix_device", {"op": "update_host", "target": back["device_id"], "host": "127.0.0.240"})
+    assert moved.error and "helper" in moved.data["error"] and "wiz" in moved.data["error"]
+
+
+async def test_diagnose_a_radio_device(hass: HomeAssistant, house, monkeypatch) -> None:
+    asked = _network(monkeypatch)
+    door = (await call(hass, "diagnose_device", {"target": "Back door sensor"})).data["devices"][0]
+    assert door["connection"] == "zigbee" and door["cause"] == "radio_silent" and "battery" in door["fix"]["person"]
+    assert "IKEA of Sweden PARASOLL door sensor" in door["tailor"] and asked == []  # no address to check
+    lamp = (await call(hass, "diagnose_device", {"target": "Loft reading light"})).data["devices"][0]
+    assert (lamp["manufacturer"], lamp["connection"], lamp["cause"]) == ("Signify Netherlands B.V.", "zigbee", "ok")
+
+
+async def test_network_check_reads_any_router_and_any_signal(hass: HomeAssistant, house, monkeypatch) -> None:
+    _network(monkeypatch)
+    d = (await call(hass, "network_check")).data
+    assert d["router"]["devices"] == [{"name": "Acme AX3000", "manufacturer": "Acme Networks", "model": "AX3000",
+                                       "integration": "upnp", "found_by": "integration"}]
+    assert d["internet"] == "on" and "Acme AX3000 Download speed" in d["router"]["sensors"]
+    assert not any("External IP" in k for k in d["router"]["sensors"])
+    plug = next(s for s in d["signal"] if s["device"] == "Study plug")
+    assert plug == {"device": "Study plug", "room": "Study", "rssi": -65, "signal": "good", "from": "home_assistant"}
+    assert d["errors_since_start"]["shelly"] == 12 and d["network_devices"]["unreachable"] >= 9
 
 
 async def test_registry_edits_read_back_and_undo(hass: HomeAssistant, house) -> None:
@@ -223,7 +286,7 @@ async def test_routines_are_checked_saved_tried_listed_and_undone(hass: HomeAssi
     Path(hass.config.path("automations.yaml")).write_text("[]\n", encoding="utf-8")
     assert await async_setup_component(hass, "automation", {"automation": []})
     calls = async_mock_service(hass, "light", "turn_off")
-    lamp = "light.living_room_lamp"
+    lamp = "light.den_lamp"
     config = {"alias": "Lamp off at night", "triggers": [{"trigger": "time", "at": "23:15:00"}],
               "actions": [{"action": "light.turn_off", "target": {"entity_id": lamp}}]}
 
@@ -283,7 +346,7 @@ async def test_log_run_scores_lists_and_exports_stripped(hass: HomeAssistant, ho
                                       "outcome": "3 back"})
     assert ok.data["met_rubric"]
     bad = await call(hass, "log_run", {"skill": "build-a-skill", "request": "get my lights back",
-                                       "checks": {**good, "R6": False}, "notes": "said 10.0.0.220 and light.kitchen_pendant_2 to Kitchen Pendant 2"})
+                                       "checks": {**good, "R6": False}, "notes": "said 10.0.0.220 and light.kitchen_island_2 to Kitchen Island 2"})
     assert bad.data["run"]["score"] == 5 and "skill_update" in bad.data["next"]
     broke = await call(hass, "log_run", {"skill": "build-a-skill", "checks": good, "broke_rule": True})
     assert broke.data["run"]["score"] == 0
@@ -291,7 +354,7 @@ async def test_log_run_scores_lists_and_exports_stripped(hass: HomeAssistant, ho
     assert len(listed.data["runs"]) == 2
     exported = await call(hass, "log_run", {"op": "export"})
     text = open(exported.data["file"], encoding="utf-8").read()
-    assert "10.0.0.220" not in text and "light.kitchen_pendant_2" not in text and "Kitchen Pendant 2" not in text
+    assert "10.0.0.220" not in text and "light.kitchen_island_2" not in text and "Kitchen Island 2" not in text
     calls = await call(hass, "log_run", {"op": "calls"})
     assert [c["tool"] for c in calls.data["calls"]][:2] == ["log_run", "log_run"]
 

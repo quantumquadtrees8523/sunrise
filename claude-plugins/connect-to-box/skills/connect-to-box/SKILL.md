@@ -70,8 +70,8 @@ it instead of from nothing.
 ~/.claude/connect-to-box/boxes/<box-slug>/box-history.md  # optional blow-by-blow
 ```
 
-`<box-slug>` is the mDNS instance name, lowercased and hyphenated ("Console
-Home" → `console-home`). This folder is **outside the plugin**, so plugin
+`<box-slug>` is the mDNS instance name, lowercased and hyphenated ("Home
+Server" → `home-server`). This folder is **outside the plugin**, so plugin
 updates never wipe it. It's on the machine running Claude Code, so you can read
 it while the box is unreachable, which is exactly when you need it. List the
 folder to see which boxes are known. If there's more than one and the owner
@@ -333,7 +333,7 @@ after, not totals.
 will use.
 
 - **Pick the address**: a local HTTPS name the owner already uses (reverse DNS
-  often gives it, e.g. `console` → `console.local`), then their remote address.
+  often gives it, e.g. `homeassistant` → `homeassistant.local`), then their remote address.
   An HTTPS name doesn't prove it's HA. A redirect to `/sign-in` or an empty
   `/auth/providers` means a login gate is in front.
 - **OAuth discovery**:
@@ -344,8 +344,9 @@ will use.
     with `trusted_proxies` set**.
   - In any of these cases, use a long-lived token. If the endpoint itself
     answers `POST` with 401, the problem is auth, not transport.
-- **Private CA** (Caddy local authority, self-signed): extract the root and
-  confirm:
+- **Private CA** (a reverse proxy's own local authority, e.g. Caddy's, or
+  self-signed): extract the root (the Caddy path is shown; other proxies keep
+  it elsewhere) and confirm:
   ```
   mkdir -p ~/.claude/certs
   ssh <box> 'docker exec <caddy-container> cat /data/caddy/pki/authorities/local/root.crt' > ~/.claude/certs/<box-slug>-root.crt
