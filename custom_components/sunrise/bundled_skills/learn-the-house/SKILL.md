@@ -1,6 +1,6 @@
 ---
 name: learn-the-house
-description: First run in a house, and again whenever asked - walks the house once through Home Assistant, asks the owner at most five short questions, and fills memory with the rooms and devices, what is off on purpose, what is flaky, how the owner wants things done and reported, and a safe test device. Ends with a one-screen summary of what it now knows and where it is kept. Use when memory is empty, after a move or big change, or when someone says "get to know my house" or "what do you know about my home?".
+description: First run in a house, and again whenever asked - walks the house once through Home Assistant, asks the owner at most five short questions, and fills memory with the rooms and devices, what is off on purpose, what is flaky, how the owner wants things done and reported, and a safe test device. Ends with a one-screen summary of what it now knows and where it is kept. Runs as the first stage of welcome; on its own, use after a move or big change, or when someone says "get to know my house" or "what do you know about my home?".
 ---
 
 # Learn the house
