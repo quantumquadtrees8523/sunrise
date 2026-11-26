@@ -1,6 +1,6 @@
 {
   "name": "connect-to-box",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Find a Home Assistant box, get a repeatable key-based shell on it, and record how in a box record that any other skill can rely on.",
   "author": {
     "name": "Sunrise contributors"

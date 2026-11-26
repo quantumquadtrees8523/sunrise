@@ -66,7 +66,7 @@ async def test_prompt_has_rules_and_skill_index(hass: HomeAssistant) -> None:
     await setup_integration(hass)
     ctx = llm.LLMContext(platform="mcp_server", context=None, language="en", assistant="conversation", device_id=None)
     api = await llm.async_get_api(hass, LLM_API_ID, ctx)
-    for words in ("never change router settings", "read back", "build-a-skill"):
+    for words in ("never change router settings", "read back", "build-a-skill", "offer welcome first"):
         assert words in api.api_prompt
 
 
@@ -74,7 +74,7 @@ async def test_built_in_skills_installed_outside_custom_components(hass: HomeAss
     await setup_integration(hass)
     res = await call(hass, "list_skills")
     names = {s["name"] for s in res.data["skills"]}
-    assert names == {"add-a-device", "build-a-skill", "custom-cards", "device-diagnosis", "improve-home", "learn-the-house", "routines", "undo", "wifi-diagnosis"}
+    assert names == {"add-a-device", "build-a-skill", "custom-cards", "device-diagnosis", "explain", "improve-home", "learn-the-house", "routines", "undo", "welcome", "wifi-diagnosis"}
     folder = hass.config.path("sunrise", "skills", "build-a-skill")
     assert "custom_components" not in folder
     got = await call(hass, "get_skill", {"name": "build-a-skill", "include_references": True})

@@ -21,6 +21,7 @@ It works out of the box, and you can change every part of it. It's free and open
 
 | Skill | Use it when | Needs the internet? |
 |---|---|---|
+| `welcome` | right after install, or "get started": learns the house, makes one routine with you to show how asking works, then looks for what would help most if you want; asks "keep going, or stop here?" after each step and picks up where you stopped | only if an idea in the last step uses a cloud service |
 | `learn-the-house` | first run, or "get to know my house": reads Home Assistant, asks at most five questions, fills memory, shows what it now knows | no |
 | `add-a-device` | "I bought a new light": identifies it, gives you the pairing steps, names it, puts it in its room, tests it | only to look up the device |
 | `routines` | "do X when Y": restates it, checks it, saves it, runs it once to test, puts things back; change or remove one the same way | no |
@@ -29,6 +30,7 @@ It works out of the box, and you can change every part of it. It's free and open
 | `improve-home` | "how could my home be smarter?": at most five ideas, each with evidence from your house; builds the ones you pick; never pitches the same idea twice | only for ideas that use a cloud service |
 | `custom-cards` | "make me a dashboard", "add a card for the lights": the house's own dashboards from a card library in its look, catalog first, stock dashboards untouched; tested, checked on a real device, undoable | only to install the build tools the first time |
 | `undo` | "what did you change?", "put it back": lists recent changes and undoes them, smallest step first | no |
+| `explain` | "what's an SSH key?", "what does that mean?": what it is with an everyday comparison, why it matters in your house right now, what you'd see or do, whether it's safe to ignore; then back to whatever you were doing | only to look the idea up |
 | `build-a-skill` | "make this repeatable": builds a skill from a request or from work just done, your way, tested | no |
 
 **Building blocks.** The tools are the shared primitives: map the house, act with read-back,
@@ -121,6 +123,12 @@ yourself, each in a prompt Claude opens for you: copy your SSH key to the box if
 store a Home Assistant token when the box needs one, accept HACS's terms and authorize it with
 GitHub, and choose the test device. You can also run `/connect-to-box:connect-to-box` on its own
 whenever you need a shell on the box.
+
+| Claude-side skill | Use it when | Needs the internet? |
+|---|---|---|
+| `/connect-to-box:connect-to-box` | "get me onto the box": finds it, gets a key-based shell, keeps a record of how | no |
+| `/sunrise:install` | installing Sunrise: checkpoint, HACS, the integration, MCP, a check on a real device | yes, to download HACS and Sunrise |
+| `/sunrise:explain` | "what's mDNS?" at any point, the install included: a plain-words explanation with sources, then back to the same step | only to look the idea up |
 
 Both plugins live in [`claude-plugins/`](claude-plugins/) and run on the Claude side only. Neither
 is part of what HACS installs (`custom_components/sunrise/`) or of the house skills in `skills/`,

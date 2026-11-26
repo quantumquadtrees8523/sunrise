@@ -124,7 +124,7 @@ Then `log_run`.
 ## Hands off to / called from
 
 Wi-Fi evidence: `wifi-diagnosis`. A change made things worse: `undo`.
-Called from `add-a-device`, `routines`, `improve-home` and `learn-the-house`.
+Called from `add-a-device`, `routines`, `improve-home`, `learn-the-house` and `welcome`.
 
 ## Words for the owner
 

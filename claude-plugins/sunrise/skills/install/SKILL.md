@@ -30,6 +30,11 @@ obvious route is closed, keep going another way.
 starting clean to make the install easier. If a route is blocked, find another
 one. A fresh install is only ever a last resort the owner raises.
 
+**Explain as you go.** When a term may be new to the owner (HACS, MCP, a
+token, a certificate), explain it in one plain sentence, and tell them they can
+say **explain <term>** (`/sunrise:explain`) for more. After an explanation,
+pick up at the same step.
+
 ## Hard rules
 
 - Take a checkpoint before the first change. Keep it **on the box only**, with
@@ -390,8 +395,8 @@ the container).
 
 ## After a pass
 
-Say it worked in one line, then offer the first skill: "Say **learn the
-house** and I'll walk it once and fill in memory." Don't start it unasked.
+Say it worked in one line, then offer the first skill: "Say **get started**
+and I'll walk you through setting up your home." Don't start it unasked.
 
 ## Rollback
 

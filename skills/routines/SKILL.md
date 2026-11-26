@@ -82,7 +82,7 @@ Then `log_run`.
 ## Hands off to / called from
 
 A device it needs is missing: `add-a-device`. Dead or flaky: `device-diagnosis`. "Put it back": `undo`.
-Called from `improve-home` and `add-a-device`.
+Called from `improve-home`, `add-a-device` and `welcome`.
 
 ## Words for the owner
 
