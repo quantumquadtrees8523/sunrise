@@ -182,11 +182,13 @@ def tailor(d: Dev, cause: str) -> str | None:
     """For a device Sunrise has no helper for: what to look up so the person's steps are its maker's own."""
     if cause not in NEEDS_MAKER:
         return None
-    what = " ".join(x for x in (d.manufacturer, d.model) if x) or "this device"
-    via = f" (it reaches Home Assistant through {d.via})" if d.via else ""
-    return (f"Sunrise has no helper for {d.integration or 'this kind of device'}. It is a {what}, connected by "
-            f"{d.connection or 'a way Home Assistant does not record'}{via}. Read memory playbooks/ for it first; else look up "
-            f"its maker's own steps for {NEEDS_MAKER[cause]} (the maker's support pages or app), give those, and save what works.")
+    what = " ".join(x for x in (d.manufacturer, d.model) if x) or "maker and model not recorded"
+    conn = {"network": "the home network", "zigbee": "Zigbee", "z-wave": "Z-Wave", "bluetooth": "Bluetooth",
+            "thread": "Thread"}.get(d.connection or "", "a connection Home Assistant doesn't record")
+    via = f", through {d.via}" if d.via else ""
+    return (f"Sunrise has no helper for {d.integration or 'this kind of device'}. Device: {what}, on {conn}{via}. Read memory "
+            f"playbooks/ for it first; else look up its maker's own steps for {NEEDS_MAKER[cause]} (the maker's support pages "
+            f"or app), give those, and save what works.")
 
 
 async def diagnose(hass: HomeAssistant, store: Store, net: N.Net, target: str | None, power_cycled: bool = False) -> dict[str, Any]:
