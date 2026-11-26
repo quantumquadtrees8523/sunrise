@@ -286,6 +286,15 @@ class Store:
         entry["sha"] = sha(text)
         entry["user_edited"] = entry.get("origin") == "product" and entry.get("shipped_sha") != sha(text)
 
+    @staticmethod
+    def _edited(entry: dict[str, Any], current: str) -> bool:
+        """Whether a built-in is the person's: its file on disk differs from the text that was
+        shipped, however it was changed (skill_update or by hand). Put back to the shipped text,
+        it follows the product again. Without a shipped hash we can't tell, so trust the flag."""
+        if entry.get("shipped_sha"):
+            return entry["shipped_sha"] != sha(current)
+        return bool(entry.get("user_edited"))
+
     def _refresh_meta(self) -> None:
         """After a revert put files back: make skills.json match what is on disk."""
         meta = self.meta()
@@ -330,11 +339,13 @@ class Store:
                     done["added"].append(name)
                 elif current == text:
                     pass
-                elif m.get("user_edited") or m.get("origin") == "user":
-                    if m.get("shipped_sha") != sha(text):
-                        meta = self.meta()
-                        meta.setdefault(name, {})["update_available"] = True
-                        _write_json(self.meta_path, meta)
+                elif m.get("origin") == "user" or self._edited(m, current):
+                    meta = self.meta()
+                    entry = meta.setdefault(name, {"origin": "product"})
+                    self._mark(entry, current)  # an edit made on disk counts as theirs too
+                    if entry.get("shipped_sha") != sha(text):
+                        entry["update_available"] = True
+                    _write_json(self.meta_path, meta)
                     done["kept_user_copy"].append(name)
                 else:
                     self.write(name, text, author="product", reason="updated", commit=False)

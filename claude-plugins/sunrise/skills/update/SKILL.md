@@ -138,9 +138,10 @@ this file (runs inside the HA container, token on stdin).
    JSON-RPC curl with `tools/call`). Note every built-in with `user_edited`
    or `update_available`. **Also check git:** a built-in whose `SKILL.md` has
    a `user` or `agent` commit after its newest `product` commit, or an
-   uncommitted change, was edited. `list_skills` misses edits made by hand on
-   the box (only `skill_update` marks a skill as edited), and the restart
-   replaces those with the built-in; Phase 4 puts them back. A skill needs a
+   uncommitted change, was edited. Sunrise keeps a built-in whose file differs
+   from the shipped text however it was changed, by hand included, but older
+   versions only kept ones changed through `skill_update`, so check both and
+   note any the two disagree on. A skill needs a
    decision only if this update changes its built-in text (step 4's files)
    or it already shows `update_available`. Skills the owner wrote themselves
    (`origin: user`) are never touched by an update.
@@ -176,10 +177,7 @@ In plain words, in one message:
 - **What stays:** memory and the owner's own skills. You check them after.
 - **Edited skills,** one line each: what they changed, and what the update
   changes. "Keep yours (the default), take the new one, or shall I show you
-  the difference?" For one edited by hand, say plainly: "Sunrise didn't
-  register this as yours, so the restart will swap in the built-in. Your text
-  is in its history, and I'll put it back straight after unless you'd rather
-  have the new one."
+  the difference?"
 - **Going back:** a checkpoint on the box first; restoring it puts everything
   back as it is now (*Rollback*).
 - **The Claude side:** sunrise <a> → <b>, connect-to-box <a> → <b>; it takes
@@ -262,10 +260,11 @@ disk with `ls -lt <config>/backups | head -3`. Record its name.
    built-ins the owner didn't edit, plus the ones they chose to replace.
    `references/` (the rubric and house basics) refresh in every skill folder,
    the owner's own included; that's expected. Anything else: stop.
-6. **Put back skills edited by hand** that the owner kept:
+6. **Kept skills are still theirs.** `get_skill` each one the owner kept and
+   confirm their text is there. If one was swapped for the built-in anyway (a
+   box updated to a version from before Sunrise kept hand edits), put it back:
    `behavior_revert commit=<their newest edit commit> file=<name>
-   author=user reason="keep the owner's hand edit"`. This also marks the
-   skill as theirs, so later restarts keep it. Read back with `get_skill`.
+   author=user reason="keep the owner's edit"`, then read it back.
 
 **Exit:** HACS (or the Marketplace) shows the new commit installed, the entry
 is loaded, the log is clean, and memory and the owner's skills are intact.
