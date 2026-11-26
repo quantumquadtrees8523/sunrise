@@ -1,12 +1,19 @@
 {
   "name": "sunrise",
   "description": "Sunrise for Home Assistant: the Claude Code side",
-  "owner": { "name": "Sunrise contributors" },
+  "owner": {
+    "name": "Sunrise contributors"
+  },
   "plugins": [
     {
+      "name": "connect-to-box",
+      "source": "./claude-plugins/connect-to-box",
+      "description": "Find a Home Assistant box, get a repeatable key-based shell on it, and keep a box record other skills rely on. Runs on the Claude side; ships nothing to the box."
+    },
+    {
       "name": "sunrise",
-      "source": "./claude-plugin",
-      "description": "Fresh-install Sunrise on a Home Assistant box (backup, HACS, the integration, MCP) and verify it on a real device."
+      "source": "./claude-plugins/sunrise",
+      "description": "Install Sunrise on a Home Assistant box (connect via connect-to-box, checkpoint, HACS, the integration, MCP) and verify it on a real device."
     }
   ]
 }
