@@ -123,7 +123,7 @@ async def _changes(hass, rt, a, ctx):
 async def _routine(hass, rt, a, ctx):
     from . import routines  # noqa: PLC0415
 
-    return await routines.routine(hass, rt.store, a)
+    return await routines.routine(hass, rt.store, a, allowed=partial(A.exposed, hass, ctx.assistant))
 
 
 async def _backup(hass, rt, a, ctx):
@@ -310,11 +310,15 @@ SPECS: list[Spec] = [
     Spec("routine", "Routines (automations)", "Home Assistant automations by asking. op=list: every routine and when it last ran. "
          "op=get: one routine's config. op=check: validate a config and report what it touches, saving nothing (the dry run). "
          "op=save: validate, save and load it (new, or replacing id); returns change_id for undo. op=try: run it once now, "
-         "skipping its conditions. op=delete: remove it (undoable). Locks, alarms, garage doors, heating and sound need confirmed=true.",
-         {_o("op", "list, get, check, save, try or delete"): str, _o("id", "the routine's id (omit to make a new one)"): str,
+         "skipping its conditions, and read back each thing it changes. op=delete: remove it (undoable). "
+         "Locks, alarms, garage doors, heating and sound need confirmed=true. "
+         "Suggestions: op=suggest saves a routine switched off and labelled Suggested, without a yes (it can't fire on its "
+         "own); never anything guarded, audible or not exposed. op=keep turns a suggestion (by id) into an ordinary routine "
+         "that runs on its trigger. op=dismiss removes a suggestion that's still off. All undoable.",
+         {_o("op", "list, get, check, save, try, delete, suggest, keep or dismiss"): str, _o("id", "the routine's id (omit to make a new one)"): str,
           _o("config", "the automation: alias, description, triggers, conditions, actions, mode"): dict,
           _o("confirmed", "the person said yes to exactly this, in this conversation"): bool}, CHANGES, _routine, writes=True,
-         setup=lambda a: (a.get("op") or "list") not in ("list", "get", "check")),
+         setup=lambda a: (a.get("op") or "list") not in ("list", "get", "check", "suggest", "dismiss")),
     Spec("undo", "Undo a change", "Put back one change made by registry_edit, fix_device, routine or discovered, by its change_id.",
          {_r("change_id", "from the change's result"): str}, CHANGES_IDEMPOTENT, _undo, writes=True, setup=True),
     Spec("backup", "Checkpoint Home Assistant", "A checkpoint to go back to if something breaks: a Home Assistant backup kept on "

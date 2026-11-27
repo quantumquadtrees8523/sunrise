@@ -456,7 +456,7 @@ async def undo(hass: HomeAssistant, store: Store, change_id: str) -> dict[str, A
     elif op == "add_integration":
         if hass.config_entries.async_get_entry(target):
             await hass.config_entries.async_remove(target)
-    elif op in ("routine_save", "routine_delete"):
+    elif op in ("routine_save", "routine_delete", "routine_suggest", "routine_keep", "routine_dismiss"):
         from .routines import undo_routine  # noqa: PLC0415
 
         await undo_routine(hass, row)

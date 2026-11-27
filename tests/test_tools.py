@@ -373,3 +373,77 @@ async def test_non_admin_user_can_read_but_not_change(hass: HomeAssistant, house
 async def test_usage_without_recorder_says_so(hass: HomeAssistant, house) -> None:
     res = await call(hass, "usage")
     assert "no usage to learn from" in res.data["error"]
+
+
+async def _automations(hass: HomeAssistant) -> None:
+    from pathlib import Path
+
+    from homeassistant.setup import async_setup_component
+
+    Path(hass.config.path("configuration.yaml")).write_text("automation: !include automations.yaml\n", encoding="utf-8")
+    Path(hass.config.path("automations.yaml")).write_text("[]\n", encoding="utf-8")
+    assert await async_setup_component(hass, "automation", {"automation": []})
+
+
+async def test_a_suggestion_is_saved_off_labelled_without_a_yes_run_by_a_tap_kept_and_undone(hass: HomeAssistant, house) -> None:
+    from homeassistant.helpers import label_registry as lr
+
+    from .conftest import SPEAKER
+
+    await _automations(hass)
+    lamp = "light.den_lamp"
+    async_expose_entity(hass, "conversation", lamp, True)
+    calls = async_mock_service(hass, "light", "turn_off")
+    config = {"alias": "Den lamp off at night", "description": "Off by hand around 23:10 on 9 of 14 nights",
+              "triggers": [{"trigger": "time", "at": "23:15:00"}],
+              "actions": [{"action": "light.turn_off", "target": {"entity_id": lamp}}]}
+
+    # Made unattended (nobody signed in, as Console's nightly run is): saved, but off and labelled.
+    made = await call(hass, "routine", {"op": "suggest", "config": config}, user_id=SPEAKER)
+    assert made.data["saved"] and made.data["suggestion"] and made.data["on"] is False, made.data
+    rid, eid = made.data["id"], made.data["entity_id"]
+    assert rid.startswith("suggestion_") and hass.states.get(eid).state == "off"
+    label = lr.async_get(hass).async_get_label_by_name("Suggested")
+    assert label and label.label_id in er.async_get(hass).async_get(eid).labels
+    listed = await call(hass, "routine", {"op": "list"})
+    assert next(r for r in listed.data["routines"] if r["id"] == rid)["suggestion"] is True
+    # A speaker can't run or keep it: those still need someone signed in.
+    assert "administrator" in (await call(hass, "routine", {"op": "keep", "id": rid}, user_id=SPEAKER)).data["error"]
+
+    # A tap runs it once while it stays off, and reads back what it changed.
+    tried = await call(hass, "routine", {"op": "try", "id": rid})
+    assert tried.data["ran"] and calls and calls[-1].data["entity_id"] == [lamp]
+    assert tried.data["things"][0]["id"] == lamp and hass.states.get(eid).state == "off"
+
+    # Kept: an ordinary routine, on, unlabelled. Undoing the keep puts the suggestion back as it was.
+    kept = await call(hass, "routine", {"op": "keep", "id": rid})
+    assert kept.data["ok"] and hass.states.get(eid).state == "on"
+    assert label.label_id not in er.async_get(hass).async_get(eid).labels
+    assert "initial_state" not in (await call(hass, "routine", {"op": "get", "id": rid})).data["config"]
+    assert (await call(hass, "undo", {"change_id": kept.data["change_id"]})).data["ok"]
+    assert hass.states.get(eid).state == "off" and label.label_id in er.async_get(hass).async_get(eid).labels
+
+    # Dismissed (unattended too): gone, and undoable.
+    gone = await call(hass, "routine", {"op": "dismiss", "id": rid}, user_id=SPEAKER)
+    assert gone.data["ok"] and hass.states.get(eid) is None
+    assert (await call(hass, "changes")).data["changes"][0]["what"] == "routine_dismiss"
+
+
+async def test_a_suggestion_never_moves_a_lock_makes_sound_or_reaches_what_isnt_exposed(hass: HomeAssistant, house) -> None:
+    await _automations(hass)
+    hass.states.async_set("lock.front_door", "locked")
+    at = [{"trigger": "time", "at": "07:00:00"}]
+    lock = {"alias": "Unlock at 7", "triggers": at, "actions": [{"action": "lock.unlock", "target": {"entity_id": "lock.front_door"}}]}
+    res = await call(hass, "routine", {"op": "suggest", "config": lock, "confirmed": True})
+    assert res.data["saved"] is False and res.data["guarded"] == ["lock.front_door"]
+    lamp = "light.den_lamp"
+    async_expose_entity(hass, "conversation", lamp, False)
+    hidden = {"alias": "Lamp on at 7", "triggers": at, "actions": [{"action": "light.turn_on", "target": {"entity_id": lamp}}]}
+    res = await call(hass, "routine", {"op": "suggest", "config": hidden})
+    assert res.data["saved"] is False and res.data["not_exposed"] == [lamp]
+    # keep and dismiss only ever touch suggestions
+    async_expose_entity(hass, "conversation", lamp, True)
+    plain = await call(hass, "routine", {"op": "save", "config": hidden})
+    assert "isn't a suggestion" in (await call(hass, "routine", {"op": "dismiss", "id": plain.data["id"]})).data["error"]
+    assert hass.states.get(plain.data["entity_id"]) is not None
+    assert (await call(hass, "routine", {"op": "delete", "id": plain.data["id"]})).data["ok"]
