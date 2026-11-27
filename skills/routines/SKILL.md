@@ -1,6 +1,6 @@
 ---
 name: routines
-description: Makes, changes and removes "do X when Y" routines by asking - restates the routine in one sentence, checks the devices and triggers exist, writes it with the house's real devices, validates it, shows what would happen and when before saving, saves it, runs it once to test with read-back and puts things back, and records it in memory. Every change can be undone. Use when someone says "turn the porch light on at sunset", "when I leave, switch everything off", "change my bedtime routine" or "stop that automation".
+description: Makes, changes and removes "do X when Y" routines by asking, and suggests routines from how the house is used - restates the routine in one sentence, checks the devices and triggers exist, writes it with the house's real devices, validates it, shows what would happen and when before saving, saves it, runs it once to test with read-back and puts things back, and records it in memory. Every change can be undone. Use when someone says "turn the porch light on at sunset", "when I leave, switch everything off", "change my bedtime routine" or "stop that automation".
 ---
 
 # Routines
@@ -64,6 +64,27 @@ part). Keep the `change_id`. It must come back loaded and on.
 A trigger that can't be faked (someone arriving, sunset) is tested by its actions now, and the
 first real firing is checked later: say so, and note the follow-up in `log.md`.
 
+## Suggesting routines (nobody asked)
+
+A short-term exception to the hard rules above, for routines only. When an agent is asked to suggest
+routines (Console's nightly run, or "what routines would help?"), it may save **suggestions** without a
+yes, because a suggestion is switched off and can't fire on its own. The household runs it by tapping it;
+the agent that tracks the taps keeps it (`routine` op=keep) once it has earned that.
+
+1. `memory_read` `owner.md` and `house.md`; `routine` op=list (don't suggest what a routine already does,
+   or anything memory says the owner turned down); `usage` (14 days) for what is switched by hand at
+   about the same time, or together, on most days.
+2. Pick at most the number of suggestions asked for. Each needs evidence from `usage`: a time or a pairing
+   that held on most days. No evidence, no suggestion. Prefer turning things off over turning them on.
+3. Write each like phase 2 (a name people would say, a one-line `description` with the evidence, e.g.
+   "The den lamp went off by hand around 23:10 on 9 of the last 14 nights"). Then `routine` op=suggest.
+   It refuses anything guarded, audible or not exposed, and anything Home Assistant doesn't have; drop
+   those rather than working around them.
+4. Never `act`, `try` or `keep` while suggesting: nothing in the house changes tonight.
+5. `log.md`: the date and the suggestions made, by name.
+
+A suggestion that's no longer wanted goes with op=dismiss. A kept one is an ordinary routine (phase 5).
+
 ## Phase 5: changing or removing one
 
 - Change: `routine` op=get, edit, then phases 2 to 4 with its id.
@@ -82,7 +103,7 @@ Then `log_run`.
 ## Hands off to / called from
 
 A device it needs is missing: `add-a-device`. Dead or flaky: `device-diagnosis`. "Put it back": `undo`.
-Called from `improve-home`, `add-a-device` and `welcome`.
+Called from `improve-home`, `add-a-device` and `welcome`, and by Console's nightly suggestions.
 
 ## Words for the owner
 
