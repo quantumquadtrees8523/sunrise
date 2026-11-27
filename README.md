@@ -147,9 +147,8 @@ Sunrise, connects Claude Code over MCP and checks it on a device you pick. You d
 yourself, each in a prompt Claude opens for you: copy your SSH key to the box if it isn't there,
 store a Home Assistant token when the box needs one, accept HACS's terms and authorize it with
 GitHub, and choose the test device. You can also run `/connect-to-box:connect-to-box` on its own
-whenever you need a shell on the box. To update later, say "update sunrise" (`/sunrise:update`;
-on a plugin older than 0.4.0, first `claude plugin marketplace update sunrise && claude plugin
-update sunrise@sunrise`, then restart Claude Code).
+whenever you need a shell on the box. To update later, say "update sunrise" (`/sunrise:update`),
+or follow [Update by hand](#update-by-hand).
 
 | Claude-side skill | Use it when | Needs the internet? |
 |---|---|---|
@@ -172,6 +171,41 @@ restart Home Assistant.
 restart Home Assistant.
 
 Then: Settings → Devices & services → Add integration → **Sunrise** → Submit.
+
+## Update by hand
+
+Sunrise has two halves that update separately: the plugins in Claude Code and the integration on
+your Home Assistant box. Updating one doesn't update the other. If `/sunrise:update` isn't
+available (a plugin older than 0.4.0 doesn't have it), start with the plugins.
+
+### The plugins (on your computer)
+
+```bash
+claude plugin marketplace update sunrise
+claude plugin update sunrise@sunrise
+claude plugin update connect-to-box@sunrise
+```
+
+Then quit Claude Code (or the Claude app) and open it again: running sessions keep the old version.
+`claude plugin list` shows the installed versions. If it shows a plugin at a scope other than
+`user`, add `-s <scope>` to that plugin's update command. If you added the marketplace under
+another name, `claude plugin marketplace list` shows it; use it in place of `sunrise`.
+
+### The integration (on your box)
+
+1. Back up Home Assistant (Settings → System → Backups).
+2. Download the new version the same way you installed it:
+   - **HACS** (the Marketplace on Home Assistant 2026.11 or newer): install the **Sunrise** update
+     shown in Settings. If none is shown, open HACS → Sunrise → ⋮ → Update information, then
+     ⋮ → Redownload.
+   - **By hand:** replace the contents of `<config>/custom_components/sunrise/` with the new
+     `custom_components/sunrise/`.
+3. Restart Home Assistant, then reconnect your agent (in Claude Code: `/mcp` → `sunrise` →
+   Reconnect).
+
+Don't remove the Sunrise integration or the `<config>/sunrise/` folder: that folder holds your
+memory files, your skills and their history. Built-in skills you haven't edited update when Home
+Assistant starts; the ones you edited stay yours.
 
 ## Point your agent at it
 
