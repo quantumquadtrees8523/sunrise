@@ -1,112 +1,160 @@
 ---
 name: improve-home
-description: Finds how this house could work better with what it already has, and builds the ideas the owner picks - reads memory for their preferences, takes stock of every room's devices and how they are really used, finds what is still done by hand, what is owned but unused, what is missing and what needs tidying, proposes at most five ranked ideas each with evidence from this house, builds the chosen ones with a backup and a live test, and remembers what was accepted or declined. Use when someone asks "how can my home be smarter?", "what should I automate?", "what am I not using?" or "what should I buy next?".
+description: Makes the house more connected - links what the house already knows (who is home, the time and sun, the internet, a phone's battery, what is playing) to what it can do on another device (lights, speakers, notices to a phone, a dashboard), walking a catalogue of moments in the day, adding what people in the community have built with the same kinds of devices, and planning purchases to a budget when the owner wants the house to do more. Leads with one finished idea built from this house's real devices and asks one yes, builds it with a backup and a live test, offers the next link in the chain, and remembers what was accepted or declined. Use when someone asks "how can my home be smarter?", "what cool things can you do?", "what should I automate?", "what have other people built?", "what should I buy next?" or "I have $200, what would make the biggest difference?".
 ---
 
-# Improve the home
+# Make the house more connected
 
 Read `references/HOUSE-BASICS.md` first. Done means the rubric in `references/RUBRIC.md` passes.
 
-**Result:** a short ranked list of improvements, each backed by evidence from this house; the
-ones the owner picked are built, tested and reversible; memory knows what was accepted and declined.
+**Result:** one connection the owner said yes to is built, tested with read-back and undoable; the
+next is offered; memory knows what was pitched, built, declined, and any budget they gave.
 
-**Stance:** you are the implementation specialist. Take stock yourself, then bring finished
-ideas, not questions. You suggest; the owner decides.
+**The idea:** a house gets smarter when something it already *knows* makes something *happen*
+somewhere else. "The phone got home, so the lights come on." "The internet dropped, so the phone
+gets a notice." Pitch connections like these, never a tour of features or a tidy-up list.
+
+**Stance:** you have set up a hundred homes. Do the looking yourself, then come back with one
+finished idea in the owner's words and one question. You suggest; the owner decides.
 
 ## Hard rules
 
-- Every idea cites evidence from this house (a count, a time, a device). No evidence, no idea.
-- At most 5 ideas, ranked. Never pitch an idea that was already pitched, whatever the answer was.
-- No upsell. Prefer what they own. When something must be bought, describe the capability, not a brand.
-- Prefer options that work on the home network without a cloud service; say when one needs the internet.
+- Every idea uses this house's real devices and people by the names they use, and cites evidence
+  (a habit from `usage`, a signal nothing reads, a routine they kept on). No evidence, no idea.
+- Lead with **one** idea, fully worked out; at most two more, one line each; **one** yes/no question.
+  Never end with "which would you like?" or a menu.
+- Never pitch what `suggestions.md` holds, whatever the answer was, or what `owner.md` rules out.
+- Tidy-ups and repairs are not ideas. Raise one only as a step inside the idea it blocks.
+- Prefer a signal over a clock: sunset over "16:30", "the phone got home" over "18:00".
+- Home Assistant reacts to changes, not standing states: say what will really happen, and offer
+  the nearest honest version of "whenever the phone is home the light is at 100".
+- Prefer what they own; buying is a plan to their budget, never a sales pitch (phase 6).
+- Prefer what works on the home network without a cloud service; say when one needs the internet.
 - Nothing safety-related (locks, alarms, garage doors, heat, water, anything that leaves the house
   unlocked or unattended) is automated without an explicit yes to that exact behaviour.
+- Quiet hours: no sound and nothing changing by itself then unless they asked for it.
 - Building anything: `backup` first, dry run, live test with read-back, and it must be undoable.
-- Respect quiet hours and anything `owner.md` says they don't want.
 
-## Memory
+## Phase 1: what is known, and two lists
 
-Start: `memory_read` `owner.md` (preferences, dislikes, budget, who lives here), `house.md`,
-`log.md`, and `suggestions.md`: every idea already pitched and what they said. End: update them (phase 6).
+`memory_read` `owner.md`, `house.md`, `suggestions.md`, `log.md` and the `playbooks/` that bear on
+it: the people and their devices, quiet hours, who gets which notices, named looks ("night mode"),
+what they asked for and haven't got, a budget, every idea already pitched. Then from `house_map`,
+`usage` (14 days, 30 if quiet) and the routines that are on, list:
 
-## Phase 1: take stock
+- **Signals (what it can know):** people and phones (home/away, battery); time (sunrise, sunset,
+  weekday, quiet hours); weather, calendar; the house itself (internet, last good backup, updates,
+  unreachable count); activity (a TV, console or speaker starting, a light switched by hand, a
+  power reading); sensors (motion, doors, temperature) if any.
+- **Responses (what it can do):** light (brightness, warmth, colour, a named look); sound (play,
+  move, group rooms, say something out loud); notices to a phone or tablet (check it is exposed);
+  a dashboard for a room or a purpose.
 
-1. `house_map`: every room, its devices and what each can do (dim, colour, temperature, sense
-   motion, measure power, play sound).
-2. `usage` (14 days, 30 if quiet): what is switched by hand, when, how often; what never changes.
-3. `audit`: what is dead, unnamed, duplicated, without a room; noisy integrations.
-4. The existing automations, scenes and scripts (from `house_map`), and when each last ran.
+Mark what is **already connected** (each routine that is on) and what **nothing reads**.
 
-Exit: a per-room picture: what is there, what it can do, how it is used, what already runs by itself.
+## Phase 2: walk the day
 
-## Phase 2: find the openings
+| Moment | Recipes (signal → response) |
+|---|---|
+| Waking up | alarm hour or sunrise → lights ramp warm to cool; → music or a spoken morning brief |
+| Leaving | last person away → lights off, music stops; → a notice if something was left on |
+| Coming home | a phone arrives → the right look for the hour; → the music they were playing resumes |
+| Evening | sunset → warm light in the rooms in use; the house's named evening look |
+| Play | the TV or console starts → the room dims, music pauses; stops → back as it was |
+| Bedtime | bedtime hour or the last light off → the rest off, speakers stop |
+| Keeping watch | internet down, a device dropped, no backup, battery low → a notice to the right person |
+| One place | the routines, the music or one room → a dashboard with toggles |
+| Talk to it | a spoken request → a spoken reply on a speaker in that room |
 
-Look for each kind, and write down the evidence as you go.
+Mark each: **ready** (both ends exist, nothing connects them), **one step away** (one owner step
+first: expose a phone, sign in to a music service, power-cycle a speaker; say which) or **needs a
+purchase**.
 
-| Kind | What to look for | Evidence to cite |
-|---|---|---|
-| Done by hand, on a pattern | the same thing switched at about the same time most days, or always together | "the hall light was turned off by hand at about 23:10 on 11 of 14 nights" |
-| Owned but unused | sensors no automation reads; lights that can change colour or warmth and never do; presence, power or weather data nothing uses; scenes never run | the capability and zero uses |
-| Missing | a room with lights but no sensor or switch control; one device everything depends on; no way to do it by voice or from one place | the room and what it lacks |
-| Fragile | devices often unavailable; an automation that failed recently; weak links | counts from `audit` and `usage` |
-| Untidy | unclear or duplicate names, things with no room, no recent backup, updates waiting | the list |
+## Phase 3: what others have built
 
-Exit: a list of candidate ideas, each with its evidence.
+When a web search tool is there (Console's `web__search`, or your own) and the internet is up,
+always run 2-4 searches before pitching, for what people built with **this house's kinds of devices**, e.g. "Home Assistant
+community automation ideas smart speakers phone presence lights". Prefer the Home Assistant
+community forum, its blueprint exchange and owner forums over shops and listicles.
 
-## Phase 3: rank and propose
+- Queries name only kinds of devices, well-known brands and integrations. Never a person, a room
+  name, an address, an id or anything from memory.
+- Keep an idea only if it maps onto this house's signals and responses, and mark it like a
+  recipe. Drop cloud-only versions when a local one exists, and anything touching safety.
+- In the pitch, say where it came from in a few words ("people on the Home Assistant forum do
+  this") and keep the link for the report.
+- No search tool or no internet: skip this phase and say so in one line.
 
-Drop anything in `suggestions.md`, anything `owner.md` rules out, and anything without evidence.
-Rank by benefit to the household over effort; fragile and untidy items that block others go first.
-Present at most 5, each in this shape:
+## Phase 4: choose and pitch
 
-- **What it does for you**, in one sentence, in plain words.
-- **Why, here:** the evidence.
-- **Effort:** now, with what you own / a small purchase / a project.
-- **Risk:** what could annoy or go wrong, and how it is undone.
-- **Can I do it now?** yes / yes after you buy X / steps for you.
+Drop what `owner.md` rules out and every recipe whose signal and response match a line in
+`suggestions.md`, even in other words or as part of a bigger idea; "pending" counts. Rank: ready, then one step away, then
+needs a purchase; an idea that extends something they use (a named look, a routine they kept on,
+a `usage` habit) first; a moment with no connection yet before one that has some; crossing devices
+before staying on one. Pitch the top one like this:
 
-Then ask which to do.
+> **First I'd build this: when your phone gets home after dark, the living room comes on in your
+> evening look.** Your phone already tells the house when you're home, and you switched those lights
+> on by hand most evenings in the last two weeks. I'd test it by running it once now and putting the
+> lights back. "Undo that" removes it. After that: a notice on your phone if the internet goes down,
+> and music that pauses when the TV comes on. Shall I build the first one?
 
-## Phase 4: build what they picked (no purchase needed)
+Say: when, what happens, on which devices by name, why this house, how it is tested and undone, any
+owner step first. Plain words, no ids. All the best ideas need buying: ask whether to plan a budget.
 
-For each, one at a time:
+## Phase 5: build it
 
-1. `backup`, and confirm it.
-2. A "do X when Y": run `routines` (it checks, saves, tests and puts things back).
-3. A repeatable job for the agent rather than an automation: run `build-a-skill`.
-4. A failed step means fix or stop, never "leave it on anyway".
+1. `backup`, and confirm it is listed.
+2. "Do X when Y": run `routines`. Music: `music-assistant`. A dashboard: `custom-cards`. A
+   repeatable job for the agent: `build-a-skill`.
+3. Prove it live where safe: send the real notice, run the light change and put it back, play at low
+   volume outside quiet hours. One that can't be triggered for real (a battery at 20%) is run once
+   as a test, and you say a test run skips the trigger.
+4. A failed step means fix or stop, never "leave it on anyway". A device that won't answer: `device-diagnosis`.
 
-For tidy-ups use `registry_edit`, one approved change at a time; each can be undone with `undo`.
-For fragile devices, run `device-diagnosis`.
+Your first words say what the read-back proved: "Done and checked" only after a CHECKED read-back;
+otherwise "Saved, but I couldn't confirm it works", and why. A tool answering "ok" is not a
+read-back, and a notice you couldn't read back was not sent. Then say what now works in one sentence and offer the next recipe in the chain as one question
+("Now that the lights know you're home, want the music to start too?"). Declined: "Fine, I won't bring that up again."
 
-## Phase 5: what to buy (when they picked one that needs it)
+## Phase 6: a budget and what to buy
 
-Give a spec by capability: what it must sense or control, how it must connect to work with what
-they have (name the connection types already in the house), that it works locally, where it goes,
-and what it unlocks. Offer to set it up when it arrives. No brands unless they ask.
+When the owner asks what to buy, names a sum, or said yes to planning one:
 
-## Phase 6: save what was learned
+1. **The budget:** use the one in `owner.md`, or ask once ("under $50, up to $200, or more?").
+2. **What it unlocks:** for each capability the house lacks (motion in a room, a door sensor, a
+   smart plug, a speaker, a button by the bed), list the recipes it would make ready here, by name.
+3. **Rank by what it unlocks per dollar**, and stop at the budget. Something already owned that
+   needs only a repair or a sign-in comes first, at $0.
+4. **Each item:** the capability; where it goes; the recipes it unlocks; how it connects with what is
+   here (the connection types the house already uses; say if it needs a hub, and count the hub);
+   that it works without the cloud; a price range, dated, from at most 4 searches in all. Name one
+   or two example products only now that they have asked to shop; the right kind matters more than the brand.
+   Answer fit questions (which hub, will it plug into the box) from `house_map` setup and `house.md`, not the owner:
+   no radio listed there means none; plan for that and add "skip this if you already have one".
+5. **The plan:** a short table (item, unlocks, about how much), the total, and what *not* to buy
+   (what the house already covers). If nothing is worth buying, say so. Never buy, never ask for
+   payment details. One question: "Want me to save this plan and set each one up when it arrives?" (`add-a-device`).
 
-- `suggestions.md`: one line per idea pitched today: the date, the idea, its evidence, and what they
-  said (accepted, declined or later). Keep the old lines; an idea is never pitched twice.
-- `owner.md`: preferences you learned ("no lights changing on their own in the bedroom").
-- `house.md`: what was built, with the date and how to undo it; gaps still open.
-- `log.md`: date, what was pitched, what was built, test results.
+## Phase 7: save what was learned
+
+- `suggestions.md`: one line per idea pitched today: date, moment, idea, evidence, where it came from
+  (this house or a link), and the answer (accepted, declined, later). Old lines stay.
+- `owner.md`: preferences learned and the budget, dated ("notices go to the iPad"; "about $150").
+- `house.md`: the connection built, with date, signal, response and how to undo it; the recipes still
+  one step away or waiting on a purchase, and what they wait on.
+- `log.md`: date, what was pitched, what was built, test results, the shopping plan if one was made.
 
 Then `log_run`.
 
 ## Hands off to / called from
 
-Build an idea: `routines` or `build-a-skill`; a dashboard: `custom-cards`. Fragile devices: `device-diagnosis`. After a purchase: `add-a-device`.
-Called from `learn-the-house` and `welcome`.
-
-## Words for the owner
-
-- Pitch: "Three things would make the biggest difference. First: …"
-- Before building: "This will turn the hall light off at 23:15 if nobody has moved for 10 minutes. I'll back up first and you can undo it. OK?"
-- Declined: "Fine, I won't bring that up again."
+Build a routine: `routines`; music: `music-assistant`; a dashboard: `custom-cards`; a repeatable job:
+`build-a-skill`. A device that won't answer: `device-diagnosis`. After a purchase: `add-a-device`.
+A term they don't know: `explain`. Called from `learn-the-house` and `welcome`.
 
 ## Report
 
-What was pitched (titles), what was built and tested, what waits on a purchase or a later yes,
-and how to undo each change. No ids unless asked.
+What was built and tested (in the owner's words), what was offered next, what waits on an owner step
+or a purchase, the shopping plan and its total if one was made, sources for outside ideas, and how
+to undo each change. No ids unless asked.
