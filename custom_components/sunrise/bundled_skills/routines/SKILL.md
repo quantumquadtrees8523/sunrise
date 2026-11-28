@@ -102,6 +102,23 @@ the clock: that's the full run above.
 A suggestion that's no longer wanted goes with op=dismiss; the house remembers it, and `follows` never
 offers that pair again. A kept one is an ordinary routine (phase 5).
 
+## When the person's hand wins (nobody asks)
+
+A routine is the house's guess; what someone just did by hand is what they want now. Sunrise enforces
+this in code, with no model and nobody asked: when a routine's run switches a light, switch, fan or cover
+away from what a person set it to in the last two hours, it stops that run and puts the thing back
+(HA's logbook says so). When the same routine keeps doing it to the same thing at about the same time
+(3 days in 14), Sunrise changes the routine to leave that thing alone at those hours: only that step,
+wrapped in an "only outside these hours" check, labelled **Adapted**, its reason added to the
+description, one entry in `changes` (op `routine_adapt`) and a line in `log.md`.
+
+- `usage` reports both: `overruled` (each time the hand won) and `adapted` (each routine changed).
+  Read them before changing a routine, and when someone asks "why didn't the lights come on?".
+- Don't undo an adaptation or fight it with a new routine unless the person asks; it's what they did.
+  "Put it back" is `undo` with its change_id.
+- An adaptation is the house's best guess too. When editing an Adapted routine for another reason, keep
+  its "Sunrise: leave the … alone" step unless the person says otherwise.
+
 ## Phase 5: changing or removing one
 
 - Change: `routine` op=get, edit, then phases 2 to 4 with its id.

@@ -22,6 +22,7 @@ from homeassistant.helpers.event import async_track_time_interval
 
 from .api import SunriseAPI, Runtime
 from .const import DATA_FOLDER, SHIPPED_SKILLS, VERSION
+from .hand import Hand
 from .house import USAGE_DOMAINS, UsageTally
 from .listening import Heard, hears
 from .store import BehaviorError, Store
@@ -50,25 +51,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: SunriseEntry) -> bool:
     await hass.async_add_executor_job(tally.load)
     rt.heard = heard = Heard(store)
     await hass.async_add_executor_job(heard.load)
+    rt.hand = hand = Hand(hass, store)
+    await hass.async_add_executor_job(hand.load)
 
     @callback
     def counted(event: Event) -> None:
         new, old = event.data.get("new_state"), event.data.get("old_state")
         if new is None or (old is not None and old.state == new.state):
             return
+        hand.seen(new.context)
         if hears(new) and old is not None and old.state not in ("unavailable", "unknown"):
             heard.sensor(new)  # listening.py: what a routine could start from
         if new.domain not in USAGE_DOMAINS:
             return
         if new.state in ("unavailable", "unknown") or (old is not None and old.state in ("unavailable", "unknown")):
             return
-        tally.add(new.entity_id, new.state, new.context, new.last_changed)
-        heard.change(new.entity_id, new.state, new.context, new.last_changed)
+        automated = hand.automated(new.context)
+        tally.add(new.entity_id, new.state, new.context, new.last_changed, automated)
+        if not automated:
+            heard.change(new.entity_id, new.state, new.context, new.last_changed)
+        hand.change(new)  # hand.py: a person's change outranks a routine's for a while
 
     entry.async_on_unload(hass.bus.async_listen(EVENT_STATE_CHANGED, counted))
+    entry.async_on_unload(hass.bus.async_listen("automation_triggered", hand.triggered))
     async def save(_now) -> None:
         await hass.async_add_executor_job(tally.save)
         await hass.async_add_executor_job(heard.save)
+        await hass.async_add_executor_job(hand.save)
 
     entry.async_on_unload(async_track_time_interval(hass, save, timedelta(minutes=10)))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -80,4 +89,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: SunriseEntry) -> bool:
         await hass.async_add_executor_job(entry.runtime_data.tally.save)
     if entry.runtime_data.heard:
         await hass.async_add_executor_job(entry.runtime_data.heard.save)
+    if entry.runtime_data.hand:
+        await hass.async_add_executor_job(entry.runtime_data.hand.save)
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

@@ -456,7 +456,8 @@ async def undo(hass: HomeAssistant, store: Store, change_id: str) -> dict[str, A
     elif op == "add_integration":
         if hass.config_entries.async_get_entry(target):
             await hass.config_entries.async_remove(target)
-    elif op in ("routine_save", "routine_delete", "routine_suggest", "routine_keep", "routine_dismiss"):
+    elif op in ("routine_save", "routine_delete", "routine_suggest", "routine_keep", "routine_dismiss",
+                "routine_adapt"):
         from .routines import undo_routine  # noqa: PLC0415
 
         await undo_routine(hass, row)
@@ -557,9 +558,10 @@ class UsageTally:
     def save(self) -> None:
         self.store.put("usage", self.data)
 
-    def add(self, entity_id: str, new_state: str, context: Context, when) -> None:
+    def add(self, entity_id: str, new_state: str, context: Context, when, automated: bool = False) -> None:
         row = self.data.setdefault(entity_id, {"by": {}, "on_hours": {}, "days": []})
-        who = "person" if context.user_id else ("automation" if context.parent_id else "device_or_unknown")
+        # automated: a routine's run (hand.py knows clock-started ones, which have no parent context)
+        who = "person" if context.user_id else ("automation" if automated or context.parent_id else "device_or_unknown")
         row["by"][who] = row["by"].get(who, 0) + 1
         if new_state == "on":
             local = dt_util.as_local(when)

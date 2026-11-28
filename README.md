@@ -51,6 +51,16 @@ Without the internet a skill says what it can't look up and carries on with what
 your home (your router's pages, how your bulbs behave, which device to test on, how you like
 things reported) goes into memory files, so the next run starts from there.
 
+### Your hand wins
+
+Routines are the house's guesses; what you just did is what you want. When a routine switches a light,
+switch, fan or cover away from what someone in the house set it to in the last two hours (in the app, by
+asking, at the wall), Sunrise stops that run and puts it back as you left it. Nobody is asked; Home
+Assistant's logbook has a line. If the same routine keeps doing it to the same thing at about the same time
+(3 days in 14), Sunrise changes that routine to leave that thing alone then: only that step, labelled
+**Adapted**, with the reason added to its description and a line in `log.md`. `changes` lists it and `undo`
+puts it back. Never a lock, alarm, garage door or gate.
+
 ### Memory
 
 Plain Markdown in `<config>/sunrise/memory/` that the agent writes and you can open, edit or delete:

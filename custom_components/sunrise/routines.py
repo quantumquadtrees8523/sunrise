@@ -102,19 +102,26 @@ async def _put(hass: HomeAssistant, rid: str, config: dict[str, Any] | None) -> 
     return before
 
 
-def _label_id(hass: HomeAssistant, create: bool) -> str | None:
+LABELS = {  # name → (icon, description)
+    SUGGESTED_LABEL: ("mdi:lightbulb-auto-outline", "A routine Sunrise suggested. It's a suggestion until it's kept."),
+    "Adapted": ("mdi:hand-back-left-outline", "A routine Sunrise changed because someone kept overruling it by hand. "
+                "Its description says what changed and why; Sunrise's undo puts it back."),
+}
+
+
+def _label_id(hass: HomeAssistant, create: bool, name: str = SUGGESTED_LABEL) -> str | None:
     from homeassistant.helpers import label_registry as lr  # noqa: PLC0415
 
     labels = lr.async_get(hass)
-    found = labels.async_get_label_by_name(SUGGESTED_LABEL)
+    found = labels.async_get_label_by_name(name)
     if found is None and create:
-        found = labels.async_create(SUGGESTED_LABEL, icon="mdi:lightbulb-auto-outline",
-                                    description="A routine Sunrise suggested. It's a suggestion until it's kept.")
+        icon, description = LABELS[name]
+        found = labels.async_create(name, icon=icon, description=description)
     return found.label_id if found else None
 
 
-def _label(hass: HomeAssistant, eid: str | None, on: bool) -> None:
-    if not eid or not (entry := er.async_get(hass).async_get(eid)) or (label := _label_id(hass, on)) is None:
+def _label(hass: HomeAssistant, eid: str | None, on: bool, name: str = SUGGESTED_LABEL) -> None:
+    if not eid or not (entry := er.async_get(hass).async_get(eid)) or (label := _label_id(hass, on, name)) is None:
         return
     labels = set(entry.labels) | {label} if on else set(entry.labels) - {label}
     er.async_get(hass).async_update_entity(eid, labels=labels)
@@ -307,6 +314,8 @@ async def undo_routine(hass: HomeAssistant, row: dict[str, Any]) -> None:
     if before is None and (eid := _entity(hass, rid)):
         er.async_get(hass).async_remove(eid)
     await _reload(hass, rid)
+    if row.get("op") == "routine_adapt":
+        _label(hass, _entity(hass, rid), False, "Adapted")
     if before is not None and rid.startswith(SUGGESTION) and row.get("op") in ("routine_keep", "routine_dismiss"):
         # a kept suggestion put back, or a dismissed one brought back: a suggestion again (off if it was saved off)
         if eid := _entity(hass, rid):

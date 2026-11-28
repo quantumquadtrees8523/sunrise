@@ -2,7 +2,7 @@
 
 DOMAIN = "sunrise"
 NAME = "Sunrise"
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 MIN_HA_VERSION = "2026.10.0"
 
 LLM_API_ID = DOMAIN  # MCP endpoint: /api/mcp/sunrise

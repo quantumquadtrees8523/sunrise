@@ -39,6 +39,7 @@ class Runtime:
     reload_wait: float | None = None
     tally: Any = None  # house.UsageTally, set up in __init__
     heard: Any = None  # listening.Heard, set up in __init__
+    hand: Any = None  # hand.Hand, set up in __init__
     memory_changed: Callable[[], None] | None = None  # tells sensor.sunrise_memory to read the files again
 
 
@@ -143,6 +144,8 @@ async def _usage(hass, rt, a, ctx):
         existing = await hass.async_add_executor_job(routines._read, hass.config.path(routines.FILE))
         existing += await hass.async_add_executor_job(rt.store.get, routines.TURNED_DOWN, [])  # dismissed: never again
         out["follows"] = listening.patterns(hass, rt.heard, existing)
+    if rt.hand is not None:
+        out |= rt.hand.report()
     return out
 
 
@@ -344,7 +347,10 @@ SPECS: list[Spec] = [
          "goes on, the days used, and whether a person or an automation did it. `follows` is what the house heard: a door, window, "
          "motion or presence sensor (or a person coming or going) changed and someone switched a thing by hand within two minutes, "
          "on at least 4 days and 6 times in 10, each with its evidence and the routine that would do it. A pair a routine "
-         "already covers, or that the household turned down (a dismissed suggestion), is never listed.",
+         "already covers, or that the household turned down (a dismissed suggestion), is never listed. `overruled` is each time a "
+         "person's hand won: a routine switched something away from what a person had set it to in the last two hours, so Sunrise "
+         "stopped that run and put it back. `adapted` is each routine Sunrise changed after a person kept overruling it on the same "
+         "thing at about the same time on 3 days in 14 (only that step, only at those hours; in `changes` and undoable).",
          {_o("days", "1-30, default 14"): int}, READ, _usage),
     Spec("list_skills", "List skills", "Every skill in this house (built-in copies and the person's own) with its description, "
          "version and whether the person edited it.", {}, READ, _list_skills),
