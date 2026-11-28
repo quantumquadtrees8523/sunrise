@@ -141,6 +141,7 @@ async def _usage(hass, rt, a, ctx):
     out = await H.usage(hass, rt.tally, int(a.get("days") or 14))
     if rt.heard is not None:
         existing = await hass.async_add_executor_job(routines._read, hass.config.path(routines.FILE))
+        existing += await hass.async_add_executor_job(rt.store.get, routines.TURNED_DOWN, [])  # dismissed: never again
         out["follows"] = listening.patterns(hass, rt.heard, existing)
     return out
 
@@ -342,7 +343,8 @@ SPECS: list[Spec] = [
     Spec("usage", "How the house is used", "For each light, switch, fan, speaker and thermostat over the last days: changes, the hours it "
          "goes on, the days used, and whether a person or an automation did it. `follows` is what the house heard: a door, window, "
          "motion or presence sensor (or a person coming or going) changed and someone switched a thing by hand within two minutes, "
-         "on at least 4 days and 6 times in 10, each with its evidence and the routine that would do it.",
+         "on at least 4 days and 6 times in 10, each with its evidence and the routine that would do it. A pair a routine "
+         "already covers, or that the household turned down (a dismissed suggestion), is never listed.",
          {_o("days", "1-30, default 14"): int}, READ, _usage),
     Spec("list_skills", "List skills", "Every skill in this house (built-in copies and the person's own) with its description, "
          "version and whether the person edited it.", {}, READ, _list_skills),

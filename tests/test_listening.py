@@ -134,6 +134,9 @@ async def test_the_integration_hears_live_and_usage_carries_follows(hass: HomeAs
     _evenings(heard)
     res = await call(hass, "usage", {"days": 3})
     assert res.data["follows"][0]["routine"]["triggers"][0]["entity_id"] == DOOR
+    # The household turned that one down (a dismissed suggestion): it's never offered again.
+    entry.runtime_data.store.put("turned_down", [{"when": [DOOR], "then": [HALL]}])
+    assert (await call(hass, "usage", {"days": 3})).data["follows"] == []
 
 
 async def test_what_it_heard_is_saved_and_old_days_are_dropped(hass: HomeAssistant) -> None:

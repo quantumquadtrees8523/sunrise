@@ -76,7 +76,8 @@ the agent that tracks the taps keeps it (`routine` op=keep) once it has earned t
    about the same time, or together, on most days. Its `follows` list is what the house heard: a door,
    window, motion or presence sensor changed (or a person came or went) and someone switched a thing by
    hand within two minutes, on at least 4 days and 6 times in 10. Each entry has its `evidence` and the
-   `routine` that would do it, already checked against the routines the house has.
+   `routine` that would do it, already checked against the routines the house has and the suggestions
+   the household turned down.
 2. Pick at most the number of suggestions asked for. Each needs evidence from `usage`: a time or a pairing
    that held on most days. No evidence, no suggestion. Prefer turning things off over turning them on.
    An entry in `follows` is evidence as it stands: save its `routine` unchanged, strongest first.
@@ -91,7 +92,15 @@ the agent that tracks the taps keeps it (`routine` op=keep) once it has earned t
    refusals apply. Never pass `on=true` on your own judgment.
 5. `log.md`: the date and the suggestions made, by name.
 
-A suggestion that's no longer wanted goes with op=dismiss. A kept one is an ordinary routine (phase 5).
+**Listening (asked on a schedule, "what did the house hear?")**: this is the short form of the steps
+above. Call `usage` once and look only at `follows`. Nothing there: change nothing and say so in one
+line. Otherwise save each entry's `routine` with `routine` op=suggest, strongest first, up to the number
+asked for (with `on=true` only if the request says the owner wants suggestions live), and reply with
+one line: how many, by name. Don't read memory or other skills for this, and don't look for habits by
+the clock: that's the full run above.
+
+A suggestion that's no longer wanted goes with op=dismiss; the house remembers it, and `follows` never
+offers that pair again. A kept one is an ordinary routine (phase 5).
 
 ## Phase 5: changing or removing one
 

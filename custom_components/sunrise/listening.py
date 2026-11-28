@@ -143,7 +143,8 @@ def _action(entity_id: str, to: str) -> dict[str, Any]:
 
 def patterns(hass: HomeAssistant, heard: Heard, existing: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """Every "when this changes, someone does that" that cleared the bar, strongest first. `existing` is
-    the house's automations: a pair one of them already names (the sensor and the thing) is left out."""
+    the house's automations and the suggestions it turned down: a pair one of them names (the sensor and
+    the thing) is left out."""
     done = [str(row) for row in existing or []]
     out = []
     for key, hits in heard.data["pairs"].items():

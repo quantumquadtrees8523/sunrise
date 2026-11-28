@@ -128,6 +128,15 @@ def _state_of(hass: HomeAssistant, eids: list[str]) -> list[dict[str, Any]]:
     return out
 
 
+TURNED_DOWN = "turned_down"  # the store's key: [{"when": [ids], "then": [ids]}], the last 200
+
+
+def _turn_down(store: Store, row: dict[str, Any]) -> None:
+    rows = store.get(TURNED_DOWN, []) or []
+    if row["then"] and row not in rows:
+        store.put(TURNED_DOWN, (rows + [row])[-200:])
+
+
 def _labelled(hass: HomeAssistant, rid: str) -> bool:
     eid = _entity(hass, rid)
     entry = er.async_get(hass).async_get(eid) if eid else None
@@ -231,6 +240,10 @@ async def routine(hass: HomeAssistant, store: Store, a: dict[str, Any], allowed=
         if eid := _entity(hass, rid):
             er.async_get(hass).async_remove(eid)
         await _reload(hass, rid)
+        # What the household turned down, so listening never offers the same pair again (listening.patterns).
+        down = {"when": _things(before.get("triggers") or before.get("trigger") or []),
+                "then": _things(before.get("actions") or before.get("action") or [])}
+        await hass.async_add_executor_job(_turn_down, store, down)
         change = await _record(hass, store, op="routine_dismiss", target=rid, before=before, after=None)
         return {"ok": _entity(hass, rid) is None, "dismissed": rid, "change_id": change["id"]}
     if op in ("check", "save"):

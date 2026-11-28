@@ -466,6 +466,11 @@ async def test_a_live_suggestion_runs_at_once_and_is_a_suggestion_until_kept_or_
     # Dismissed: gone. Undo brings the live suggestion back.
     gone = await call(hass, "routine", {"op": "dismiss", "id": rid}, user_id=SPEAKER)
     assert gone.data["ok"] and hass.states.get(eid) is None
+    # ...and the house remembers what was turned down, so listening never offers that pair again.
+    from custom_components.sunrise import routines as R
+
+    entry = hass.config_entries.async_entries("sunrise")[0]
+    assert entry.runtime_data.store.get(R.TURNED_DOWN) == [{"when": ["binary_sensor.front_door"], "then": [lamp]}]
     assert (await call(hass, "undo", {"change_id": gone.data["change_id"]})).data["ok"]
     assert hass.states.get(eid).state == "on"
 
