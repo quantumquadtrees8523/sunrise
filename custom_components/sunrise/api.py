@@ -38,6 +38,7 @@ class Runtime:
     act_cutoff: float | None = None
     reload_wait: float | None = None
     tally: Any = None  # house.UsageTally, set up in __init__
+    heard: Any = None  # listening.Heard, set up in __init__
     memory_changed: Callable[[], None] | None = None  # tells sensor.sunrise_memory to read the files again
 
 
@@ -135,7 +136,14 @@ async def _network(hass, rt, a, ctx):
 
 
 async def _usage(hass, rt, a, ctx):
-    return await H.usage(hass, rt.tally, int(a.get("days") or 14))
+    from . import listening, routines  # noqa: PLC0415
+
+    out = await H.usage(hass, rt.tally, int(a.get("days") or 14))
+    if rt.heard is not None:
+        existing = await hass.async_add_executor_job(routines._read, hass.config.path(routines.FILE))
+        existing += await hass.async_add_executor_job(rt.store.get, routines.TURNED_DOWN, [])  # dismissed: never again
+        out["follows"] = listening.patterns(hass, rt.heard, existing)
+    return out
 
 
 async def _list_skills(hass, rt, a, ctx):
@@ -314,10 +322,13 @@ SPECS: list[Spec] = [
          "Locks, alarms, garage doors, heating and sound need confirmed=true. "
          "Suggestions: op=suggest saves a routine switched off and labelled Suggested, without a yes (it can't fire on its "
          "own); never anything guarded, audible or not exposed. op=keep turns a suggestion (by id) into an ordinary routine "
-         "that runs on its trigger. op=dismiss removes a suggestion that's still off. All undoable.",
+         "that runs on its trigger. op=dismiss removes a suggestion that's still off. With on=true op=suggest saves it running "
+         "at once (same checks, same label): only when the owner has asked for suggestions to be live. It is a suggestion "
+         "until op=keep (the label comes off) or op=dismiss (it's removed). All undoable.",
          {_o("op", "list, get, check, save, try, delete, suggest, keep or dismiss"): str, _o("id", "the routine's id (omit to make a new one)"): str,
           _o("config", "the automation: alias, description, triggers, conditions, actions, mode"): dict,
-          _o("confirmed", "the person said yes to exactly this, in this conversation"): bool}, CHANGES, _routine, writes=True,
+          _o("confirmed", "the person said yes to exactly this, in this conversation"): bool,
+          _o("on", "op=suggest only: true saves the suggestion switched on (live suggestions)"): bool}, CHANGES, _routine, writes=True,
          setup=lambda a: (a.get("op") or "list") not in ("list", "get", "check", "suggest", "dismiss")),
     Spec("undo", "Undo a change", "Put back one change made by registry_edit, fix_device, routine or discovered, by its change_id.",
          {_r("change_id", "from the change's result"): str}, CHANGES_IDEMPOTENT, _undo, writes=True, setup=True),
@@ -330,7 +341,10 @@ SPECS: list[Spec] = [
          "unreachable, Wi-Fi signal where devices report it, error counts per integration. Changes nothing.",
          {}, READ, _network),
     Spec("usage", "How the house is used", "For each light, switch, fan, speaker and thermostat over the last days: changes, the hours it "
-         "goes on, the days used, and whether a person or an automation did it.",
+         "goes on, the days used, and whether a person or an automation did it. `follows` is what the house heard: a door, window, "
+         "motion or presence sensor (or a person coming or going) changed and someone switched a thing by hand within two minutes, "
+         "on at least 4 days and 6 times in 10, each with its evidence and the routine that would do it. A pair a routine "
+         "already covers, or that the household turned down (a dismissed suggestion), is never listed.",
          {_o("days", "1-30, default 14"): int}, READ, _usage),
     Spec("list_skills", "List skills", "Every skill in this house (built-in copies and the person's own) with its description, "
          "version and whether the person edited it.", {}, READ, _list_skills),

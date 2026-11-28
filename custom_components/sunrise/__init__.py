@@ -23,6 +23,7 @@ from homeassistant.helpers.event import async_track_time_interval
 from .api import SunriseAPI, Runtime
 from .const import DATA_FOLDER, SHIPPED_SKILLS, VERSION
 from .house import USAGE_DOMAINS, UsageTally
+from .listening import Heard, hears
 from .store import BehaviorError, Store
 
 PLATFORMS = ["sensor"]
@@ -47,19 +48,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: SunriseEntry) -> bool:
 
     rt.tally = tally = UsageTally(store)
     await hass.async_add_executor_job(tally.load)
+    rt.heard = heard = Heard(store)
+    await hass.async_add_executor_job(heard.load)
 
     @callback
     def counted(event: Event) -> None:
         new, old = event.data.get("new_state"), event.data.get("old_state")
-        if new is None or new.domain not in USAGE_DOMAINS or (old is not None and old.state == new.state):
+        if new is None or (old is not None and old.state == new.state):
+            return
+        if hears(new) and old is not None and old.state not in ("unavailable", "unknown"):
+            heard.sensor(new)  # listening.py: what a routine could start from
+        if new.domain not in USAGE_DOMAINS:
             return
         if new.state in ("unavailable", "unknown") or (old is not None and old.state in ("unavailable", "unknown")):
             return
         tally.add(new.entity_id, new.state, new.context, new.last_changed)
+        heard.change(new.entity_id, new.state, new.context, new.last_changed)
 
     entry.async_on_unload(hass.bus.async_listen(EVENT_STATE_CHANGED, counted))
     async def save(_now) -> None:
         await hass.async_add_executor_job(tally.save)
+        await hass.async_add_executor_job(heard.save)
 
     entry.async_on_unload(async_track_time_interval(hass, save, timedelta(minutes=10)))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -69,4 +78,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: SunriseEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: SunriseEntry) -> bool:
     if entry.runtime_data.tally:
         await hass.async_add_executor_job(entry.runtime_data.tally.save)
+    if entry.runtime_data.heard:
+        await hass.async_add_executor_job(entry.runtime_data.heard.save)
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

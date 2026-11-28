@@ -73,17 +73,34 @@ the agent that tracks the taps keeps it (`routine` op=keep) once it has earned t
 
 1. `memory_read` `owner.md` and `house.md`; `routine` op=list (don't suggest what a routine already does,
    or anything memory says the owner turned down); `usage` (14 days) for what is switched by hand at
-   about the same time, or together, on most days.
+   about the same time, or together, on most days. Its `follows` list is what the house heard: a door,
+   window, motion or presence sensor changed (or a person came or went) and someone switched a thing by
+   hand within two minutes, on at least 4 days and 6 times in 10. Each entry has its `evidence` and the
+   `routine` that would do it, already checked against the routines the house has and the suggestions
+   the household turned down.
 2. Pick at most the number of suggestions asked for. Each needs evidence from `usage`: a time or a pairing
    that held on most days. No evidence, no suggestion. Prefer turning things off over turning them on.
+   An entry in `follows` is evidence as it stands: save its `routine` unchanged, strongest first.
 3. Write each like phase 2 (a name people would say, a one-line `description` with the evidence, e.g.
    "The den lamp went off by hand around 23:10 on 9 of the last 14 nights"). Then `routine` op=suggest.
    It refuses anything guarded, audible or not exposed, and anything Home Assistant doesn't have; drop
    those rather than working around them.
 4. Never `act`, `try` or `keep` while suggesting: nothing in the house changes tonight.
+   **Live suggestions**: only when the request says the owner wants suggestions live, save with
+   `routine` op=suggest `on=true`. It then runs on its own trigger from now on, still labelled
+   Suggested, and the owner keeps it (op=keep) or takes it back (op=dismiss, or `undo`). The same
+   refusals apply. Never pass `on=true` on your own judgment.
 5. `log.md`: the date and the suggestions made, by name.
 
-A suggestion that's no longer wanted goes with op=dismiss. A kept one is an ordinary routine (phase 5).
+**Listening (asked on a schedule, "what did the house hear?")**: this is the short form of the steps
+above. Call `usage` once and look only at `follows`. Nothing there: change nothing and say so in one
+line. Otherwise save each entry's `routine` with `routine` op=suggest, strongest first, up to the number
+asked for (with `on=true` only if the request says the owner wants suggestions live), and reply with
+one line: how many, by name. Don't read memory or other skills for this, and don't look for habits by
+the clock: that's the full run above.
+
+A suggestion that's no longer wanted goes with op=dismiss; the house remembers it, and `follows` never
+offers that pair again. A kept one is an ordinary routine (phase 5).
 
 ## Phase 5: changing or removing one
 
