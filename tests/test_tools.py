@@ -429,6 +429,52 @@ async def test_a_suggestion_is_saved_off_labelled_without_a_yes_run_by_a_tap_kep
     assert (await call(hass, "changes")).data["changes"][0]["what"] == "routine_dismiss"
 
 
+async def test_a_live_suggestion_runs_at_once_and_is_a_suggestion_until_kept_or_dismissed(hass: HomeAssistant, house) -> None:
+    """Owner, 2026-11-28: "once its on its on and should be running". on=true saves it switched on, with the same
+    checks and label; keep takes the label off, dismiss removes it, and undo brings either back."""
+    from homeassistant.helpers import label_registry as lr
+
+    from .conftest import SPEAKER
+
+    await _automations(hass)
+    lamp = "light.den_lamp"
+    async_expose_entity(hass, "conversation", lamp, True)
+    config = {"alias": "Den lamp on at the door", "description": "5 of 6 evenings",
+              "triggers": [{"trigger": "state", "entity_id": "binary_sensor.front_door", "to": "on"}],
+              "actions": [{"action": "light.turn_on", "target": {"entity_id": lamp}}]}
+    hass.states.async_set("binary_sensor.front_door", "off", {"device_class": "door"})
+
+    made = await call(hass, "routine", {"op": "suggest", "config": config, "on": True}, user_id=SPEAKER)
+    assert made.data["saved"] and made.data["suggestion"] and made.data["on"] is True, made.data
+    rid, eid = made.data["id"], made.data["entity_id"]
+    assert hass.states.get(eid).state == "on" and "initial_state" not in (await call(hass, "routine", {"op": "get", "id": rid})).data["config"]
+    label = lr.async_get(hass).async_get_label_by_name("Suggested")
+    assert label.label_id in er.async_get(hass).async_get(eid).labels
+
+    row = next(r for r in (await call(hass, "routine", {"op": "list"})).data["routines"] if r["id"] == rid)
+    assert row["suggestion"] is True and row["on"] is True
+
+    # Kept: the label comes off and it's an ordinary routine, still on. Undo makes it a suggestion again, still on.
+    kept = await call(hass, "routine", {"op": "keep", "id": rid})
+    assert kept.data["ok"] and label.label_id not in er.async_get(hass).async_get(eid).labels
+    row = next(r for r in (await call(hass, "routine", {"op": "list"})).data["routines"] if r["id"] == rid)
+    assert "suggestion" not in row
+    assert "remove it with op=delete" in (await call(hass, "routine", {"op": "dismiss", "id": rid})).data["error"]
+    assert (await call(hass, "undo", {"change_id": kept.data["change_id"]})).data["ok"]
+    assert hass.states.get(eid).state == "on" and label.label_id in er.async_get(hass).async_get(eid).labels
+
+    # Dismissed: gone. Undo brings the live suggestion back.
+    gone = await call(hass, "routine", {"op": "dismiss", "id": rid}, user_id=SPEAKER)
+    assert gone.data["ok"] and hass.states.get(eid) is None
+    assert (await call(hass, "undo", {"change_id": gone.data["change_id"]})).data["ok"]
+    assert hass.states.get(eid).state == "on"
+
+    # The same lines hold live: nothing guarded, audible or hidden.
+    hass.states.async_set("lock.front_door", "locked")
+    lock = {**config, "actions": [{"action": "lock.unlock", "target": {"entity_id": "lock.front_door"}}]}
+    assert (await call(hass, "routine", {"op": "suggest", "config": lock, "on": True})).data["saved"] is False
+
+
 async def test_a_suggestion_never_moves_a_lock_makes_sound_or_reaches_what_isnt_exposed(hass: HomeAssistant, house) -> None:
     await _automations(hass)
     hass.states.async_set("lock.front_door", "locked")
